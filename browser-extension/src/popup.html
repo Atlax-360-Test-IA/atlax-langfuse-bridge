@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'unsafe-inline';"
+    />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        font-size: 13px;
+        width: 300px;
+        padding: 14px;
+        color: #1e1e2e;
+        background: #fff;
+      }
+      h1 {
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 12px;
+        color: #4c1d95;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        color: #555;
+        margin-top: 10px;
+        margin-bottom: 3px;
+      }
+      input {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid #d1d5db;
+        border-radius: 5px;
+        font-size: 12px;
+        font-family: monospace;
+      }
+      input:focus {
+        outline: none;
+        border-color: #7c3aed;
+      }
+      button {
+        margin-top: 12px;
+        width: 100%;
+        padding: 7px;
+        background: #6d28d9;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #7c3aed;
+      }
+      .status {
+        margin-top: 10px;
+        padding: 7px 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .ok {
+        background: #dcfce7;
+        color: #15803d;
+      }
+      .err {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+      .wait {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .none {
+        background: #f3f4f6;
+        color: #6b7280;
+      }
+      .divider {
+        border: none;
+        border-top: 1px solid #e5e7eb;
+        margin: 12px 0;
+      }
+      .hint {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 8px;
+        line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Claude Telemetry — Atlax360</h1>
+
+    <label for="host">Langfuse Host</label>
+    <input
+      id="host"
+      type="url"
+      placeholder="http://localhost:3000"
+      autocomplete="off"
+    />
+
+    <label for="pk">Public Key</label>
+    <input
+      id="pk"
+      type="text"
+      placeholder="pk-lf-..."
+      autocomplete="off"
+      spellcheck="false"
+    />
+
+    <label for="sk">Secret Key</label>
+    <input id="sk" type="password" placeholder="sk-lf-..." autocomplete="off" />
+
+    <button id="save">Guardar y verificar</button>
+
+    <div id="status" class="status none">Sin configurar</div>
+
+    <hr class="divider" />
+    <p class="hint">
+      Captura: modelo, tokens, coste estimado.<br />
+      Surface: <strong>chat</strong> o <strong>projects</strong> por URL.<br />
+      Platform: <strong>browser</strong> o <strong>app</strong> (Electron).
+    </p>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
