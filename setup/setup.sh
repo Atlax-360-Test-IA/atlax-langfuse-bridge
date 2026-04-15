@@ -48,7 +48,7 @@ else
   # Fallback: download from repo (si se distribuye sin clonar)
   warn "langfuse-sync.ts no encontrado localmente. Descargando..."
   curl -fsSL \
-    "https://raw.githubusercontent.com/atlax360/atlax-langfuse-bridge/main/hooks/langfuse-sync.ts" \
+    "https://raw.githubusercontent.com/Atlax-360-Test-IA/atlax-langfuse-bridge/main/hooks/langfuse-sync.ts" \
     -o "$HOOK_SCRIPT"
   ok "Hook descargado en $HOOK_SCRIPT"
 fi

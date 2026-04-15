@@ -53,7 +53,7 @@ if (Test-Path $HookSource) {
 } else {
     Write-Warn "Fuente local no encontrada. Descargando desde repo..."
     Invoke-WebRequest `
-        -Uri "https://raw.githubusercontent.com/atlax360/atlax-langfuse-bridge/main/hooks/langfuse-sync.ts" `
+        -Uri "https://raw.githubusercontent.com/Atlax-360-Test-IA/atlax-langfuse-bridge/main/hooks/langfuse-sync.ts" `
         -OutFile $HookScript
     Write-Ok "Hook descargado en $HookScript"
 }
