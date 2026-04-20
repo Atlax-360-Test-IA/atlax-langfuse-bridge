@@ -199,7 +199,9 @@ async function replayHook(
       hook_event_name: "Stop",
     });
 
-    const proc = spawn("bun", ["run", HOOK_PATH], {
+    // Use the bun binary currently executing the reconciler. systemd user
+    // services don't source ~/.zshrc, so relying on PATH would fail.
+    const proc = spawn(process.execPath, ["run", HOOK_PATH], {
       stdio: ["pipe", "pipe", "pipe"],
       env: process.env,
     });
@@ -256,6 +258,12 @@ async function main() {
 
     const tid = `cc-${sid}`;
     const local = aggregate(p);
+
+    // Skip sessions with no assistant usage — they never generated a trace
+    // (the hook itself exits early on empty usage). Reporting them as drift
+    // is noise.
+    if (local.turns === 0) continue;
+
     const remote = await getTrace(tid);
     const rTurns: number | null = remote?.metadata?.turns ?? null;
     const rCost: number | null = remote?.metadata?.estimatedCostUSD ?? null;
