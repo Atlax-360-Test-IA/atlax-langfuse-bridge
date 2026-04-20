@@ -1,0 +1,20 @@
+[Unit]
+Description=Atlax Langfuse — reconcile timer (every 15 min)
+Documentation=https://github.com/Atlax-360-Test-IA/atlax-langfuse-bridge
+
+[Timer]
+# Run 2 minutes after boot, then every 15 minutes.
+OnBootSec=2min
+OnUnitActiveSec=15min
+
+# Randomize ±60s to avoid thundering-herd if multiple devs are on the same
+# Langfuse server.
+RandomizedDelaySec=60
+
+# If the machine was asleep when a tick was due, fire ASAP on resume.
+Persistent=true
+
+Unit=atlax-langfuse-reconcile.service
+
+[Install]
+WantedBy=timers.target

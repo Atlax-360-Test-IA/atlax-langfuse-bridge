@@ -1,0 +1,30 @@
+[Unit]
+Description=Atlax Langfuse — reconcile Claude Code session traces
+Documentation=https://github.com/Atlax-360-Test-IA/atlax-langfuse-bridge
+# Only run if Langfuse is reachable (systemd v249+ ConditionPathExists could
+# check a TCP socket via a helper script; omitted here for portability).
+
+[Service]
+Type=oneshot
+# Load Langfuse credentials from a user-scoped env file.
+# Create %h/.atlax-ai/reconcile.env with:
+#   LANGFUSE_HOST=https://langfuse.atlax360.com
+#   LANGFUSE_PUBLIC_KEY=pk-lf-...
+#   LANGFUSE_SECRET_KEY=sk-lf-...
+#   WINDOW_HOURS=24
+EnvironmentFile=%h/.atlax-ai/reconcile.env
+
+# %h = $HOME — adjust the WorkingDirectory if the repo lives elsewhere.
+WorkingDirectory=%h/work/atlax-langfuse-bridge
+ExecStart=/home/%u/.bun/bin/bun run scripts/reconcile-traces.ts
+
+# Safety rails
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=300
+
+# stdout/stderr land in journalctl (JSON log lines from the script)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=atlax-langfuse-reconcile
