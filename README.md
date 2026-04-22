@@ -31,8 +31,10 @@ Intercepta el hook `Stop` de Claude Code al final de cada sesión y envía traza
 ```
 atlax-langfuse-bridge/
 ├── docker/
-│   ├── docker-compose.yml       # Langfuse v3 self-hosted completo
-│   └── env.example              # Variables requeridas (copiar a .env)
+│   ├── docker-compose.yml       # Langfuse v3 + LiteLLM (opt-in)
+│   ├── env.example              # Variables requeridas (copiar a .env)
+│   └── litellm/
+│       └── config.yaml          # Config gateway LiteLLM (Fase 1)
 ├── hooks/
 │   └── langfuse-sync.ts         # Hook Stop (Bun, sin dependencias)
 ├── scripts/
@@ -40,7 +42,10 @@ atlax-langfuse-bridge/
 │   ├── reconcile-traces.ts      # Cron job: repara traces con drift
 │   ├── detect-tier.ts           # Escribe ~/.atlax-ai/tier.json
 │   └── statusline.sh            # Statusline Claude Code → detect-tier
+├── shared/
+│   └── model-pricing.ts         # Fuente única pricing (hooks/scripts/LiteLLM)
 ├── docs/
+│   ├── plan-fase-1-litellm.md   # Plan SDD Fase 1
 │   └── systemd/                 # User units Linux/WSL del reconciler
 ├── setup/
 │   ├── setup.sh                 # Installer Linux / macOS / WSL
@@ -177,6 +182,36 @@ entrypoint:<type>                entrypoint:cli | entrypoint:sdk-ts
 branch:<git-branch>              branch:feat/sprint-k
 infra:<provider>                 infra:anthropic | infra:gcp
 ```
+
+---
+
+## LiteLLM Gateway (Fase 1 — opt-in)
+
+Para workloads **no-interactivos** (agentes backend, SDK programático, MCP servers de Orvian/Atalaya) se incluye un gateway LiteLLM. El flujo Claude Code CLI de los 38 devs **no cambia** — sigue por OAuth directo a Anthropic.
+
+### Activar el gateway
+
+```bash
+cd docker
+
+# 1. Añadir las vars LiteLLM al .env (ver env.example §LiteLLM)
+#    ANTHROPIC_API_KEY, LITELLM_MASTER_KEY, LITELLM_SALT_KEY, LITELLM_UI_*
+
+# 2. Generar secretos
+echo "LITELLM_MASTER_KEY=sk-$(openssl rand -hex 32)"
+echo "LITELLM_SALT_KEY=$(openssl rand -hex 32)"
+
+# 3. Arrancar (profile opt-in)
+docker compose --profile litellm up -d
+```
+
+- **API OpenAI-compatible**: `http://localhost:4001/v1/messages`
+- **Admin UI**: `http://localhost:4001/ui` (login con `LITELLM_UI_USERNAME`/`LITELLM_UI_PASSWORD`)
+- **BD**: `litellm` en el mismo Postgres (creada automáticamente por `litellm-db-init`)
+
+Sin `--profile litellm`, `docker compose up` arranca sólo el stack Langfuse como antes.
+
+M2 añadirá el callback Langfuse para que toda llamada al gateway genere un trace `lt-*`. M3 expone virtual keys per-workload con budget enforcement.
 
 ---
 

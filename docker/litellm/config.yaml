@@ -1,0 +1,25 @@
+# ============================================================
+# LiteLLM Gateway — Fase 1 (Atlax360)
+# M1: 1 modelo + master key. M2 añade callback Langfuse.
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+# ============================================================
+
+model_list:
+  # Modelo por defecto para workloads no-interactivos (Orvian, Atalaya).
+  # Expone el alias "claude-sonnet-4-6" a los clientes OpenAI-compatible.
+  - model_name: claude-sonnet-4-6
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  # Permite gestionar modelos y virtual keys desde la admin UI — requerido por M3.
+  store_model_in_db: true
+
+# M2 activará aquí el callback Langfuse:
+# litellm_settings:
+#   success_callback: ["langfuse"]
+#   failure_callback: ["langfuse"]
+#   langfuse_default_tags: ["source:litellm-gateway"]
