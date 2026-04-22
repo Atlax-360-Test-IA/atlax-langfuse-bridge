@@ -50,12 +50,10 @@ AMPLIAR la variable en `~/.atlax-ai/reconcile.env` (típicamente a 72h o
 
 ### I-6 · Modelo de pricing central
 
-`MODEL_PRICING` en `hooks/langfuse-sync.ts` líneas 63-71 es la única
-fuente de verdad para costes estimados. Los scripts de `scripts/` DEBEN
-duplicar el mismo objeto (no importar — son scripts standalone). Cuando
-Anthropic ajusta precios, actualizar los 3 sitios en el mismo commit:
-`hooks/langfuse-sync.ts`, `scripts/validate-traces.ts`,
-`scripts/reconcile-traces.ts`.
+`MODEL_PRICING` vive en `shared/model-pricing.ts`. Es la **única fuente de
+verdad** para costes estimados — todos los consumidores importan de ahí.
+Cuando Anthropic ajusta precios, cambiar únicamente `shared/model-pricing.ts`.
+No duplicar el objeto en ningún otro fichero del repo.
 
 ### I-7 · Tier determinista en `~/.atlax-ai/tier.json`
 

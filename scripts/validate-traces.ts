@@ -16,6 +16,7 @@ import { readFileSync, statSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { getPricing } from "../shared/model-pricing";
 
 const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
   /\/$/,
@@ -34,23 +35,6 @@ if (!PK || !SK) {
 const AUTH = "Basic " + Buffer.from(`${PK}:${SK}`).toString("base64");
 const WINDOW_HOURS = Number(process.env.WINDOW_HOURS ?? "24");
 const COST_EPSILON = 0.01;
-
-// ─── Pricing (mirror of hook) ────────────────────────────────────────────────
-
-const PRICING: Record<
-  string,
-  { input: number; cacheWrite: number; cacheRead: number; output: number }
-> = {
-  "claude-opus-4": { input: 15, cacheWrite: 18.75, cacheRead: 1.5, output: 75 },
-  "claude-sonnet-4": { input: 3, cacheWrite: 3.75, cacheRead: 0.3, output: 15 },
-  "claude-haiku-4-5": { input: 0.8, cacheWrite: 1, cacheRead: 0.08, output: 4 },
-  default: { input: 3, cacheWrite: 3.75, cacheRead: 0.3, output: 15 },
-};
-const priceFor = (m: string) => {
-  for (const [k, p] of Object.entries(PRICING))
-    if (k !== "default" && m.includes(k)) return p;
-  return PRICING.default!;
-};
 
 // ─── Aggregation (mirror of hook) ────────────────────────────────────────────
 
@@ -85,7 +69,7 @@ function aggregate(path: string): LocalAgg {
     if (!u) continue;
     turns++;
     const model = e.message?.model ?? "unknown";
-    const p = priceFor(model);
+    const p = getPricing(model);
     const cost =
       ((u.input_tokens ?? 0) * p.input +
         (u.cache_creation_input_tokens ?? 0) * p.cacheWrite +

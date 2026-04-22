@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import * as os from "node:os";
 import * as path from "node:path";
+import { getPricing } from "../shared/model-pricing";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -56,25 +57,6 @@ interface ModelUsage {
   costUSD: number;
   serviceTier: string;
   turns: number;
-}
-
-// ─── Model pricing (USD per million tokens, April 2026) ──────────────────────
-
-const MODEL_PRICING: Record<
-  string,
-  { input: number; cacheWrite: number; cacheRead: number; output: number }
-> = {
-  "claude-opus-4": { input: 15, cacheWrite: 18.75, cacheRead: 1.5, output: 75 },
-  "claude-sonnet-4": { input: 3, cacheWrite: 3.75, cacheRead: 0.3, output: 15 },
-  "claude-haiku-4-5": { input: 0.8, cacheWrite: 1, cacheRead: 0.08, output: 4 },
-  default: { input: 3, cacheWrite: 3.75, cacheRead: 0.3, output: 15 },
-};
-
-function getPricing(model: string) {
-  for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
-    if (key !== "default" && model.includes(key)) return pricing;
-  }
-  return MODEL_PRICING["default"]!;
 }
 
 function calcCost(
