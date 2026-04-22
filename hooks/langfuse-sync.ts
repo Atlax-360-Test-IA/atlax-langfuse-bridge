@@ -152,6 +152,27 @@ function getBillingTier(serviceTier?: string): BillingTier {
   return "anthropic-team-standard";
 }
 
+// ─── Deterministic tier from ~/.atlax-ai/tier.json ───────────────────────────
+// Written by scripts/detect-tier.ts (called from the Claude Code statusline).
+// Complements the heuristic above with an unambiguous source of truth for
+// which Anthropic surface the session was authenticated against.
+
+interface TierFile {
+  tier: "vertex-gcp" | "api-direct" | "seat-team" | "unknown";
+  source: "env-vertex" | "env-api-key" | "oauth" | "none";
+  account: string | null;
+  detectedAt: string;
+}
+
+function readTierFile(): TierFile | null {
+  try {
+    const p = path.join(os.homedir(), ".atlax-ai", "tier.json");
+    return JSON.parse(readFileSync(p, "utf-8")) as TierFile;
+  } catch {
+    return null;
+  }
+}
+
 // ─── OS detection ────────────────────────────────────────────────────────────
 
 type OSName = "linux" | "wsl" | "macos" | "windows";
@@ -250,6 +271,7 @@ async function main(): Promise<void> {
   let sessionEnd: string | undefined;
   let entrypoint: string | undefined;
   let gitBranch: string | undefined;
+  let sessionCwd: string | undefined;
   let turnCount = 0;
 
   for (const entry of entries) {
@@ -259,6 +281,7 @@ async function main(): Promise<void> {
     }
     if (entry.entrypoint && !entrypoint) entrypoint = entry.entrypoint;
     if (entry.gitBranch && !gitBranch) gitBranch = entry.gitBranch;
+    if (entry.cwd && !sessionCwd) sessionCwd = entry.cwd;
     if (entry.type !== "assistant") continue;
 
     const usage = entry.message?.usage;
@@ -300,9 +323,16 @@ async function main(): Promise<void> {
     ?.serviceTier;
   const billingTier = getBillingTier(dominantTier);
 
+  // Prefer cwd from first JSONL entry (captures the real session origin),
+  // fall back to Stop event cwd. Fixes tag contamination when Claude Code
+  // runs the hook from a different working directory than where the
+  // session actually started.
+  const effectiveCwd = sessionCwd ?? cwd;
+
   const devEmail = getDevIdentity();
-  const projectName = getProjectName(cwd);
+  const projectName = getProjectName(effectiveCwd);
   const osName = detectOS();
+  const tierFile = readTierFile();
   const now = new Date().toISOString();
   const traceId = `cc-${session_id}`;
 
@@ -326,11 +356,16 @@ async function main(): Promise<void> {
           ...(billingTier === "vertex-gcp"
             ? ["infra:gcp"]
             : ["infra:anthropic"]),
+          ...(tierFile ? [`tier:${tierFile.tier}`] : []),
+          ...(tierFile ? [`tier-source:${tierFile.source}`] : []),
         ],
         metadata: {
           project: projectName,
-          cwd,
+          cwd: effectiveCwd,
           billingTier,
+          tier: tierFile?.tier ?? null,
+          tierSource: tierFile?.source ?? null,
+          tierAccount: tierFile?.account ?? null,
           os: osName,
           entrypoint: entrypoint ?? "cli",
           gitBranch: gitBranch ?? null,

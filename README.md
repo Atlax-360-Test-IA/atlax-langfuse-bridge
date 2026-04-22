@@ -31,14 +31,64 @@ Intercepta el hook `Stop` de Claude Code al final de cada sesión y envía traza
 ```
 atlax-langfuse-bridge/
 ├── docker/
-│   ├── docker-compose.yml   # Langfuse v3 self-hosted completo
-│   └── env.example          # Variables requeridas (copiar a .env)
+│   ├── docker-compose.yml       # Langfuse v3 self-hosted completo
+│   └── env.example              # Variables requeridas (copiar a .env)
 ├── hooks/
-│   └── langfuse-sync.ts     # Hook script (Bun, sin dependencias)
+│   └── langfuse-sync.ts         # Hook Stop (Bun, sin dependencias)
+├── scripts/
+│   ├── validate-traces.ts       # Smoke test: JSONL local vs Langfuse
+│   ├── reconcile-traces.ts      # Cron job: repara traces con drift
+│   ├── detect-tier.ts           # Escribe ~/.atlax-ai/tier.json
+│   └── statusline.sh            # Statusline Claude Code → detect-tier
+├── docs/
+│   └── systemd/                 # User units Linux/WSL del reconciler
 ├── setup/
-│   ├── setup.sh             # Installer Linux / macOS / WSL
-│   └── setup.ps1            # Installer Windows nativo
+│   ├── setup.sh                 # Installer Linux / macOS / WSL
+│   └── setup.ps1                # Installer Windows nativo
+├── browser-extension/           # MV3 capture claude.ai (futuro: MDM push)
 └── README.md
+```
+
+## Arquitectura de integridad (2 capas)
+
+```
+    ┌────────────────────┐      ┌──────────────────────┐
+    │  Capa síncrona     │      │  Capa asíncrona       │
+    │  hook Stop         │      │  reconciler cron      │
+    │  on session close  │      │  every 15 min         │
+    └──────────┬─────────┘      └──────────┬────────────┘
+               │ POST /api/public/ingestion│
+               ▼                           ▼
+               ┌──────────────────────────────────┐
+               │  Langfuse (idempotent upsert)    │
+               └──────────────────────────────────┘
+```
+
+La capa síncrona (hook) captura al cerrar sesión. La capa asíncrona
+(reconciler) escanea `~/.claude/projects/**/*.jsonl` recientes, detecta drift
+contra Langfuse (`TURNS_DRIFT`, `COST_DRIFT`, `END_DRIFT`, `MISSING`), y
+re-ejecuta el hook con un payload Stop sintético. Garantiza eventual
+consistency aunque Claude Code crashee, se haga `kill -9`, o la máquina
+reinicie antes de que `Stop` se dispare.
+
+Ver `docs/systemd/README.md` para instalación del cron.
+
+## Tier determinista (`~/.atlax-ai/tier.json`)
+
+El statusline escribe el tier de facturación actual. El hook lo lee y lo
+añade como tags `tier:seat-team | vertex-gcp | api-direct | unknown` y
+`tier-source:oauth | env-vertex | env-api-key | none`. Es la fuente
+autoritativa; `billing:*` sigue calculándose por heurística para
+retrocompatibilidad con dashboards existentes.
+
+```bash
+# Activar statusline (en ~/.claude/settings.json):
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/home/you/work/atlax-langfuse-bridge/scripts/statusline.sh"
+  }
+}
 ```
 
 ---
@@ -120,6 +170,8 @@ Una vez activo, en el panel de Langfuse:
 ```
 project:<org/repo>               atlas360/harvest
 billing:<tier>                   billing:anthropic-team-standard
+tier:<tier>                      tier:seat-team (determinista)
+tier-source:<source>             tier-source:oauth | env-vertex | env-api-key
 os:<platform>                    os:wsl | os:linux | os:macos | os:windows
 entrypoint:<type>                entrypoint:cli | entrypoint:sdk-ts
 branch:<git-branch>              branch:feat/sprint-k
@@ -146,4 +198,46 @@ infra:<provider>                 infra:anthropic | infra:gcp
 # Pull del repo y reinstalar
 git pull
 bash setup/setup.sh   # sobreescribe ~/.claude/hooks/langfuse-sync.ts
+```
+
+---
+
+## Operación
+
+### Validar integridad manualmente
+
+```bash
+# Últimas 24h
+bun run scripts/validate-traces.ts
+
+# Ventana específica
+WINDOW_HOURS=72 bun run scripts/validate-traces.ts
+
+# Sesiones concretas
+bun run scripts/validate-traces.ts path/to/session.jsonl [...]
+```
+
+Exit code `1` si hay drift (útil en CI). Requiere `LANGFUSE_*` en el entorno.
+
+### Reparar drift detectado
+
+```bash
+# Dry run (solo detecta)
+DRY_RUN=1 bun run scripts/reconcile-traces.ts
+
+# Reparación real
+bun run scripts/reconcile-traces.ts
+
+# Excluir sesión actual (la que aún no ha cerrado)
+EXCLUDE_SESSION=<sid> bun run scripts/reconcile-traces.ts
+```
+
+El reconciler loguea en JSON a stdout (journalctl-friendly). Para automatizar:
+`docs/systemd/` trae units para Linux/WSL.
+
+### Forzar redetección de tier
+
+```bash
+bun run scripts/detect-tier.ts
+cat ~/.atlax-ai/tier.json
 ```
