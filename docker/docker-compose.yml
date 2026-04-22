@@ -198,6 +198,73 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-langfuse}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
 
+  # ============================================================
+  # LiteLLM Gateway — Fase 1 (opt-in vía profile "litellm")
+  #   docker compose --profile litellm up -d
+  # Sin el profile el stack Langfuse arranca como siempre.
+  # ============================================================
+
+  # Crea la BD dedicada para LiteLLM en el Postgres existente (idempotente).
+  litellm-db-init:
+    image: postgres:15-alpine
+    profiles: ["litellm"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-langfuse}
+      POSTGRES_DB: ${POSTGRES_DB:-langfuse}
+    entrypoint: >
+      /bin/sh -c "
+      psql -h postgres -U $${POSTGRES_USER} -d $${POSTGRES_DB} -tc
+      \"SELECT 1 FROM pg_database WHERE datname = 'litellm'\" | grep -q 1 ||
+      psql -h postgres -U $${POSTGRES_USER} -d $${POSTGRES_DB} -c 'CREATE DATABASE litellm';
+      exit 0;
+      "
+
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.83.7-stable
+    restart: unless-stopped
+    profiles: ["litellm"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      litellm-db-init:
+        condition: service_completed_successfully
+    ports:
+      - "4001:4000" # host 4001 → container 4000 (API + Admin UI /ui)
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      # BD dedicada en la misma instancia Postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER:-langfuse}:${POSTGRES_PASSWORD}@postgres:5432/litellm
+      # Secreto que gates admin UI + creación de virtual keys (M3)
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      # Cifra las virtual keys persistidas en la BD — NO cambiar tras emitir claves
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY}
+      # Credencial corporativa Anthropic usada por el gateway (distinta del OAuth de los seats)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # Redis compartido con Langfuse — LiteLLM lo usa para cache + rate limiting per-key
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      UI_USERNAME: ${LITELLM_UI_USERNAME:-admin}
+      UI_PASSWORD: ${LITELLM_UI_PASSWORD}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(''http://localhost:4000/health/liveliness'').status==200 else 1)"',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
 volumes:
   postgres-data:
   clickhouse-data:
