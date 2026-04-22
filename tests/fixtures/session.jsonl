@@ -1,0 +1,8 @@
+{"type":"summary","timestamp":"2026-04-15T10:00:00.000Z","sessionId":"test-abc-123","cwd":"/home/dev/work/my-project","entrypoint":"cli","gitBranch":"feat/cool-feature"}
+{"type":"user","timestamp":"2026-04-15T10:00:05.000Z","message":{"role":"user","content":"hello"}}
+{"type":"assistant","timestamp":"2026-04-15T10:01:00.000Z","message":{"role":"assistant","model":"claude-sonnet-4-6","stop_reason":"end_turn","usage":{"input_tokens":1000,"output_tokens":500,"cache_creation_input_tokens":200,"cache_read_input_tokens":100,"service_tier":"standard"}}}
+{"type":"user","timestamp":"2026-04-15T10:02:00.000Z","message":{"role":"user","content":"refactor this"}}
+{"type":"assistant","timestamp":"2026-04-15T10:03:00.000Z","message":{"role":"assistant","model":"claude-sonnet-4-6","stop_reason":"end_turn","usage":{"input_tokens":2000,"output_tokens":1500,"cache_creation_input_tokens":0,"cache_read_input_tokens":500,"service_tier":"standard"}}}
+{"type":"user","timestamp":"2026-04-15T10:04:00.000Z","message":{"role":"user","content":"switch to opus"}}
+{"type":"assistant","timestamp":"2026-04-15T10:05:00.000Z","message":{"role":"assistant","model":"claude-opus-4-7","stop_reason":"end_turn","usage":{"input_tokens":3000,"output_tokens":2000,"cache_creation_input_tokens":500,"cache_read_input_tokens":0,"service_tier":"priority"}}}
+{"type":"result","timestamp":"2026-04-15T10:06:00.000Z","durationMs":360000}

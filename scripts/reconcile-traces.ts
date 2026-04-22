@@ -21,12 +21,12 @@
  *   2 — one or more repairs failed
  */
 
-import { readFileSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { spawn } from "node:child_process";
-import { getPricing } from "../shared/model-pricing";
+import { aggregate } from "../shared/aggregate";
 
 const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
   /\/$/,
@@ -68,52 +68,6 @@ function log(
       ...extra,
     }) + "\n",
   );
-}
-
-// ─── Aggregation (mirror of hook) + cwd extraction ───────────────────────────
-
-interface LocalAgg {
-  turns: number;
-  totalCost: number;
-  start?: string;
-  end?: string;
-  cwd?: string;
-}
-
-function aggregate(path: string): LocalAgg {
-  const lines = readFileSync(path, "utf-8").split("\n").filter(Boolean);
-  let turns = 0;
-  let totalCost = 0;
-  let start: string | undefined;
-  let end: string | undefined;
-  let cwd: string | undefined;
-
-  for (const l of lines) {
-    let e: any;
-    try {
-      e = JSON.parse(l);
-    } catch {
-      continue;
-    }
-    if (e.timestamp) {
-      start ??= e.timestamp;
-      end = e.timestamp;
-    }
-    if (e.cwd && !cwd) cwd = e.cwd;
-    if (e.type !== "assistant") continue;
-    const u = e.message?.usage;
-    if (!u) continue;
-    turns++;
-    const model = e.message?.model ?? "unknown";
-    const p = getPricing(model);
-    totalCost +=
-      ((u.input_tokens ?? 0) * p.input +
-        (u.cache_creation_input_tokens ?? 0) * p.cacheWrite +
-        (u.cache_read_input_tokens ?? 0) * p.cacheRead +
-        (u.output_tokens ?? 0) * p.output) /
-      1_000_000;
-  }
-  return { turns, totalCost, start, end, cwd };
 }
 
 // ─── Langfuse fetch ──────────────────────────────────────────────────────────

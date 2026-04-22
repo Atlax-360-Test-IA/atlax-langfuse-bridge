@@ -12,11 +12,11 @@
  * detection matches what the hook would produce on a re-run.
  */
 
-import { readFileSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { getPricing } from "../shared/model-pricing";
+import { aggregate } from "../shared/aggregate";
 
 const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
   /\/$/,
@@ -35,55 +35,6 @@ if (!PK || !SK) {
 const AUTH = "Basic " + Buffer.from(`${PK}:${SK}`).toString("base64");
 const WINDOW_HOURS = Number(process.env.WINDOW_HOURS ?? "24");
 const COST_EPSILON = 0.01;
-
-// ─── Aggregation (mirror of hook) ────────────────────────────────────────────
-
-interface LocalAgg {
-  turns: number;
-  totalCost: number;
-  start?: string;
-  end?: string;
-  models: string[];
-}
-
-function aggregate(path: string): LocalAgg {
-  const lines = readFileSync(path, "utf-8").split("\n").filter(Boolean);
-  const models = new Map<string, { turns: number; cost: number }>();
-  let start: string | undefined;
-  let end: string | undefined;
-  let turns = 0;
-
-  for (const l of lines) {
-    let e: any;
-    try {
-      e = JSON.parse(l);
-    } catch {
-      continue;
-    }
-    if (e.timestamp) {
-      start ??= e.timestamp;
-      end = e.timestamp;
-    }
-    if (e.type !== "assistant") continue;
-    const u = e.message?.usage;
-    if (!u) continue;
-    turns++;
-    const model = e.message?.model ?? "unknown";
-    const p = getPricing(model);
-    const cost =
-      ((u.input_tokens ?? 0) * p.input +
-        (u.cache_creation_input_tokens ?? 0) * p.cacheWrite +
-        (u.cache_read_input_tokens ?? 0) * p.cacheRead +
-        (u.output_tokens ?? 0) * p.output) /
-      1_000_000;
-    const cur = models.get(model) ?? { turns: 0, cost: 0 };
-    cur.turns++;
-    cur.cost += cost;
-    models.set(model, cur);
-  }
-  const totalCost = [...models.values()].reduce((s, m) => s + m.cost, 0);
-  return { turns, totalCost, start, end, models: [...models.keys()] };
-}
 
 // ─── Langfuse fetch ──────────────────────────────────────────────────────────
 
