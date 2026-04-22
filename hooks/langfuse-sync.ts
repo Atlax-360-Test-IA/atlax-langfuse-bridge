@@ -18,7 +18,7 @@ import { getPricing } from "../shared/model-pricing";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface StopEvent {
+export interface StopEvent {
   session_id: string;
   transcript_path: string;
   cwd: string;
@@ -26,7 +26,7 @@ interface StopEvent {
   hook_event_name: string;
 }
 
-interface JournalEntry {
+export interface JournalEntry {
   type?: string;
   uuid?: string;
   timestamp?: string;
@@ -49,7 +49,7 @@ interface JournalEntry {
   };
 }
 
-interface ModelUsage {
+export interface ModelUsage {
   inputTokens: number;
   outputTokens: number;
   cacheCreationTokens: number;
@@ -59,7 +59,7 @@ interface ModelUsage {
   turns: number;
 }
 
-function calcCost(
+export function calcCost(
   usage: JournalEntry["message"]["usage"],
   model: string,
 ): number {
@@ -76,7 +76,7 @@ function calcCost(
 
 // ─── Developer identification (automatic, no per-dev config needed) ──────────
 
-function getDevIdentity(): string {
+export function getDevIdentity(): string {
   // 1. Explicit override
   if (process.env.LANGFUSE_USER_ID) return process.env.LANGFUSE_USER_ID;
   if (process.env.CLAUDE_DEV_NAME) return process.env.CLAUDE_DEV_NAME;
@@ -98,7 +98,7 @@ function getDevIdentity(): string {
 
 // ─── Project identification (automatic from cwd + git remote) ────────────────
 
-function getProjectName(cwd: string): string {
+export function getProjectName(cwd: string): string {
   // Try git remote — gives canonical org/repo name
   try {
     const remote = execSync("git remote get-url origin", {
@@ -118,12 +118,12 @@ function getProjectName(cwd: string): string {
 
 // ─── Billing tier detection ───────────────────────────────────────────────────
 
-type BillingTier =
+export type BillingTier =
   | "vertex-gcp"
   | "anthropic-priority-overage"
   | "anthropic-team-standard";
 
-function getBillingTier(serviceTier?: string): BillingTier {
+export function getBillingTier(serviceTier?: string): BillingTier {
   if (
     process.env.CLAUDE_CODE_USE_VERTEX === "1" ||
     process.env.CLAUDE_CODE_USE_VERTEX === "true"
@@ -139,14 +139,14 @@ function getBillingTier(serviceTier?: string): BillingTier {
 // Complements the heuristic above with an unambiguous source of truth for
 // which Anthropic surface the session was authenticated against.
 
-interface TierFile {
+export interface TierFile {
   tier: "vertex-gcp" | "api-direct" | "seat-team" | "unknown";
   source: "env-vertex" | "env-api-key" | "oauth" | "none";
   account: string | null;
   detectedAt: string;
 }
 
-function readTierFile(): TierFile | null {
+export function readTierFile(): TierFile | null {
   try {
     const p = path.join(os.homedir(), ".atlax-ai", "tier.json");
     return JSON.parse(readFileSync(p, "utf-8")) as TierFile;
@@ -157,9 +157,9 @@ function readTierFile(): TierFile | null {
 
 // ─── OS detection ────────────────────────────────────────────────────────────
 
-type OSName = "linux" | "wsl" | "macos" | "windows";
+export type OSName = "linux" | "wsl" | "macos" | "windows";
 
-function detectOS(): OSName {
+export function detectOS(): OSName {
   if (process.platform === "win32") return "windows";
   if (process.platform === "darwin") return "macos";
   try {
@@ -316,6 +316,10 @@ async function main(): Promise<void> {
   const osName = detectOS();
   const tierFile = readTierFile();
   const now = new Date().toISOString();
+  // Use real session timestamps for trace/generation ordering in Langfuse.
+  // Falls back to `now` only if the JSONL had no timestamps at all.
+  const traceTimestamp = sessionStart ?? now;
+  const generationTimestamp = sessionEnd ?? now;
   const traceId = `cc-${session_id}`;
 
   // ── Build Langfuse batch ──
@@ -323,9 +327,10 @@ async function main(): Promise<void> {
     {
       id: randomUUID(),
       type: "trace-create",
-      timestamp: now,
+      timestamp: traceTimestamp,
       body: {
         id: traceId,
+        timestamp: traceTimestamp,
         name: "claude-code-session",
         userId: devEmail,
         sessionId: session_id,
@@ -369,7 +374,7 @@ async function main(): Promise<void> {
     batch.push({
       id: randomUUID(),
       type: "generation-create",
-      timestamp: now,
+      timestamp: generationTimestamp,
       body: {
         id: `${traceId}-${safeModelId}`,
         traceId,
@@ -402,7 +407,11 @@ async function main(): Promise<void> {
   await sendToLangfuse(batch);
 }
 
-main().catch((err: Error) => {
-  process.stderr.write(`[langfuse-sync] Error no controlado: ${err.message}\n`);
-  process.exit(0); // siempre exit 0 — no bloquear Claude Code
-});
+if (import.meta.main) {
+  main().catch((err: Error) => {
+    process.stderr.write(
+      `[langfuse-sync] Error no controlado: ${err.message}\n`,
+    );
+    process.exit(0); // siempre exit 0 — no bloquear Claude Code
+  });
+}
