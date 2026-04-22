@@ -224,7 +224,7 @@ services:
       "
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-stable
+    image: ghcr.io/berriai/litellm:v1.83.7-stable
     restart: unless-stopped
     profiles: ["litellm"]
     depends_on:
@@ -252,7 +252,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      STORE_MODEL_IN_DB: "True"
       UI_USERNAME: ${LITELLM_UI_USERNAME:-admin}
       UI_PASSWORD: ${LITELLM_UI_PASSWORD}
     healthcheck:
