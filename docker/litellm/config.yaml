@@ -1,6 +1,6 @@
 # ============================================================
 # LiteLLM Gateway — Fase 1 (Atlax360)
-# M1: 1 modelo + master key. M2 añade callback Langfuse.
+# M1: 1 modelo + master key. M2: callback Langfuse activo.
 # Docs: https://docs.litellm.ai/docs/proxy/configs
 # ============================================================
 
@@ -18,8 +18,14 @@ general_settings:
   # Permite gestionar modelos y virtual keys desde la admin UI — requerido por M3.
   store_model_in_db: true
 
-# M2 activará aquí el callback Langfuse:
-# litellm_settings:
-#   success_callback: ["langfuse"]
-#   failure_callback: ["langfuse"]
-#   langfuse_default_tags: ["source:litellm-gateway"]
+litellm_settings:
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+  langfuse_default_tags: ["source:litellm-gateway", "infra:anthropic"]
+  # Credenciales Langfuse leídas del entorno (inyectadas por docker-compose).
+  # LiteLLM SDK espera LANGFUSE_PUBLIC_KEY / SECRET_KEY / HOST.
+  # No confundir con LANGFUSE_INIT_PROJECT_* (bootstrap de Langfuse).
+  #
+  # Pricing: LiteLLM usa su BD interna de costes, no shared/model-pricing.ts.
+  # Los traces source:litellm-gateway pueden mostrar cifras distintas a los
+  # traces cc-* del hook. Divergencia aceptada y documentada (I-6).

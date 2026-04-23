@@ -211,7 +211,7 @@ docker compose --profile litellm up -d
 
 Sin `--profile litellm`, `docker compose up` arranca sólo el stack Langfuse como antes.
 
-M2 añadirá el callback Langfuse para que toda llamada al gateway genere un trace `lt-*`. M3 expone virtual keys per-workload con budget enforcement.
+**M2 (activo)**: callback Langfuse habilitado. Toda llamada al gateway genera un trace con tag `source:litellm-gateway`. Verificar con `bun run scripts/smoke-litellm-langfuse.ts`. M3 expone virtual keys per-workload con budget enforcement.
 
 ---
 
