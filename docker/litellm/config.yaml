@@ -1,6 +1,7 @@
 # ============================================================
 # LiteLLM Gateway — Fase 1 (Atlax360)
 # M1: 1 modelo + master key. M2: callback Langfuse activo.
+# M3: virtual keys per-workload + soft budget + alertas.
 # Docs: https://docs.litellm.ai/docs/proxy/configs
 # ============================================================
 
@@ -17,6 +18,10 @@ general_settings:
   database_url: os.environ/DATABASE_URL
   # Permite gestionar modelos y virtual keys desde la admin UI — requerido por M3.
   store_model_in_db: true
+  # M3: alertas de presupuesto. Dispara webhook cuando spend alcanza soft_budget.
+  # LiteLLM lee SLACK_WEBHOOK_URL del entorno (inyectado por docker-compose).
+  # Sin webhook configurado los warnings van a stdout (docker compose logs litellm).
+  alerting: ["slack"]
 
 litellm_settings:
   success_callback: ["langfuse"]
