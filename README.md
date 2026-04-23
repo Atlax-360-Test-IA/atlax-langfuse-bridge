@@ -211,7 +211,84 @@ docker compose --profile litellm up -d
 
 Sin `--profile litellm`, `docker compose up` arranca sólo el stack Langfuse como antes.
 
-**M2 (activo)**: callback Langfuse habilitado. Toda llamada al gateway genera un trace con tag `source:litellm-gateway`. Verificar con `bun run scripts/smoke-litellm-langfuse.ts`. M3 expone virtual keys per-workload con budget enforcement.
+**M2 (activo)**: callback Langfuse habilitado. Toda llamada al gateway genera un trace con tag `source:litellm-gateway`. Verificar con `bun run scripts/smoke-litellm-langfuse.ts`.
+
+### M3: Virtual keys y presupuesto por workload
+
+Cada workload backend tiene su propia virtual key con soft budget, rate limits y metadata propagada a Langfuse.
+
+| Workload | `key_alias`    | Soft budget | Budget | TPM     | RPM |
+| -------- | -------------- | ----------- | ------ | ------- | --- |
+| Orvian   | `orvian-prod`  | $50         | 30d    | 200.000 | 100 |
+| Atalaya  | `atalaya-prod` | $20         | 30d    | 100.000 | 50  |
+
+Los MCP servers usan la key del workload padre (`orvian-prod` para MCP de Orvian).
+
+#### Provisionar keys (idempotente)
+
+Requiere el gateway corriendo (`docker compose --profile litellm up -d`):
+
+```bash
+# Preview sin crear keys
+DRY_RUN=1 bun run scripts/provision-keys.ts
+
+# Crear keys
+bun run scripts/provision-keys.ts
+# → Keys guardadas en ~/.atlax-ai/virtual-keys.json
+```
+
+Re-ejecutar es seguro — los aliases ya existentes se saltan sin modificar.
+
+#### Usar una virtual key
+
+```bash
+ORVIAN_KEY=$(jq -r '.keys[] | select(.key_alias=="orvian-prod") | .key' \
+  ~/.atlax-ai/virtual-keys.json)
+
+curl http://localhost:4001/v1/chat/completions \
+  -H "Authorization: Bearer $ORVIAN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"hola"}]}'
+```
+
+#### Trazas en Langfuse
+
+LiteLLM propaga el `metadata` de la key a cada trace. Para filtrar por workload en Langfuse:
+**Traces → metadata → `workload = orvian`** (o `atalaya`).
+
+> El `metadata.workload` llega como campo del trace, no como tag. Los tags globales
+> `source:litellm-gateway` e `infra:anthropic` siguen funcionando (I-4: UNION en upsert).
+
+#### Alertas de presupuesto
+
+LiteLLM alerta cuando el spend de una key supera el `soft_budget`. Configura
+`LITELLM_ALERT_WEBHOOK_URL` en `.env` para recibir notificaciones vía Slack
+(o cualquier endpoint HTTP POST Slack-compatible: n8n, Make, etc.).
+
+Sin webhook, los warnings aparecen en los logs:
+
+```bash
+docker compose --profile litellm logs litellm | grep -i budget
+```
+
+#### Rotación de claves
+
+```bash
+OLD_KEY=$(jq -r '.keys[] | select(.key_alias=="orvian-prod") | .key' \
+  ~/.atlax-ai/virtual-keys.json)
+
+# Revocar
+curl -X POST http://localhost:4001/key/delete \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"keys\": [\"$OLD_KEY\"]}"
+
+# Re-provisionar (mismo alias, nueva key)
+bun run scripts/provision-keys.ts
+```
+
+> **ADVERTENCIA**: `LITELLM_SALT_KEY` es inmutable. Cambiarla invalida TODAS las
+> virtual keys. Solo rotar si se compromete el sistema completo.
 
 ---
 

@@ -261,6 +261,9 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY}
       # Docker internal DNS — NUNCA usar localhost aquí
       LANGFUSE_HOST: http://langfuse-web:3000
+      # M3: webhook para alertas de budget (opcional, formato Slack-compatible).
+      # Sin esta var, LiteLLM loguea warnings a stdout pero no dispara webhook.
+      SLACK_WEBHOOK_URL: ${LITELLM_ALERT_WEBHOOK_URL:-}
     healthcheck:
       test:
         [
