@@ -234,6 +234,8 @@ services:
         condition: service_healthy
       litellm-db-init:
         condition: service_completed_successfully
+      langfuse-web:
+        condition: service_healthy
     ports:
       - "4001:4000" # host 4001 → container 4000 (API + Admin UI /ui)
     volumes:
@@ -254,6 +256,11 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       UI_USERNAME: ${LITELLM_UI_USERNAME:-admin}
       UI_PASSWORD: ${LITELLM_UI_PASSWORD}
+      # M2: callback Langfuse — reutiliza las claves del proyecto ya definidas
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY}
+      # Docker internal DNS — NUNCA usar localhost aquí
+      LANGFUSE_HOST: http://langfuse-web:3000
     healthcheck:
       test:
         [
