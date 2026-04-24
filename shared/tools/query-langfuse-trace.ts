@@ -2,7 +2,7 @@
  * shared/tools/query-langfuse-trace.ts — AgentTool para buscar traces
  *
  * Tier: cached_llm — el output (metadata del trace) es determinista para el
- * mismo input, así que se integra con tier-cache SHA256.
+ * mismo input, así que se integra con hash-cache SHA256.
  *
  * Casos de uso del coordinator:
  *   - "dame los últimos N traces del usuario X"
@@ -13,8 +13,7 @@
 import { getTrace, listTraces } from "../langfuse-client";
 import type { LangfuseTrace } from "../langfuse-client";
 import type { AgentTool } from "./types";
-import { getCachedTier, setCachedTier, traceHash } from "../tier-cache";
-import { createHash } from "node:crypto";
+import { getCached, setCached, hashOf } from "../hash-cache";
 
 export interface QueryTraceInput {
   /** Trace ID explícito. Si se provee, ignora el resto. */
@@ -125,7 +124,7 @@ export const queryLangfuseTrace: AgentTool<QueryTraceInput, QueryTraceOutput> =
     },
     async execute(input, _ctx) {
       // Cache key: hash del input canónico. Tier cached_llm es cacheable.
-      const canonical = JSON.stringify({
+      const cacheKey = `query-trace:${hashOf({
         t: input.traceId ?? null,
         u: input.userId ?? null,
         s: input.sessionId ?? null,
@@ -133,9 +132,8 @@ export const queryLangfuseTrace: AgentTool<QueryTraceInput, QueryTraceOutput> =
         f: input.fromTimestamp ?? null,
         to: input.toTimestamp ?? null,
         l: input.limit ?? 20,
-      });
-      const cacheKey = createHash("sha256").update(canonical).digest("hex");
-      const cached = getCachedTier(`query-trace:${cacheKey}`);
+      })}`;
+      const cached = getCached(cacheKey);
       if (cached) {
         return { ...(JSON.parse(cached) as QueryTraceOutput), fromCache: true };
       }
@@ -179,7 +177,7 @@ export const queryLangfuseTrace: AgentTool<QueryTraceInput, QueryTraceOutput> =
 
       // Cache solo el payload sin el flag (para evitar cachear fromCache=true)
       const { fromCache: _drop, ...toCache } = result;
-      setCachedTier(`query-trace:${cacheKey}`, JSON.stringify(toCache));
+      setCached(cacheKey, JSON.stringify(toCache));
       return result;
     },
   };
