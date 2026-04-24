@@ -16,6 +16,27 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { getPricing } from "../shared/model-pricing";
 
+// ─── Degradation reporting ────────────────────────────────────────────────────
+// Emits a structured JSON entry to stderr so that log aggregators (journald,
+// Langfuse, etc.) can surface partial failures without blocking the hook.
+
+export interface DegradationEntry {
+  type: "degradation";
+  source: string;
+  error: string;
+  ts: string;
+}
+
+export function emitDegradation(source: string, err: unknown): void {
+  const entry: DegradationEntry = {
+    type: "degradation",
+    source,
+    error: err instanceof Error ? err.message : String(err),
+    ts: new Date().toISOString(),
+  };
+  process.stderr.write(JSON.stringify(entry) + "\n");
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface StopEvent {
@@ -88,8 +109,8 @@ export function getDevIdentity(): string {
       timeout: 2000,
     }).trim();
     if (email) return email;
-  } catch {
-    // ignore
+  } catch (err) {
+    emitDegradation("getDevIdentity:git-config", err);
   }
 
   // 3. OS username as fallback
@@ -109,8 +130,8 @@ export function getProjectName(cwd: string): string {
     // Extract "org/repo" from SSH or HTTPS URL
     const match = remote.match(/[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?$/);
     if (match?.[1]) return match[1];
-  } catch {
-    // ignore
+  } catch (err) {
+    emitDegradation("getProjectName:git-remote", err);
   }
   // Fallback to directory basename
   return path.basename(cwd);
@@ -150,7 +171,8 @@ export function readTierFile(): TierFile | null {
   try {
     const p = path.join(os.homedir(), ".atlax-ai", "tier.json");
     return JSON.parse(readFileSync(p, "utf-8")) as TierFile;
-  } catch {
+  } catch (err) {
+    emitDegradation("readTierFile:read", err);
     return null;
   }
 }
@@ -165,8 +187,8 @@ export function detectOS(): OSName {
   try {
     const version = readFileSync("/proc/version", "utf-8").toLowerCase();
     if (version.includes("microsoft")) return "wsl";
-  } catch {
-    // ignore
+  } catch (err) {
+    emitDegradation("detectOS:proc-version", err);
   }
   return "linux";
 }
@@ -223,7 +245,8 @@ async function main(): Promise<void> {
   let event: StopEvent;
   try {
     event = JSON.parse(raw) as StopEvent;
-  } catch {
+  } catch (err) {
+    emitDegradation("main:parse-stop-event", err);
     process.exit(0);
   }
 
@@ -234,7 +257,8 @@ async function main(): Promise<void> {
   let lines: string[];
   try {
     lines = readFileSync(transcript_path, "utf-8").split("\n").filter(Boolean);
-  } catch {
+  } catch (err) {
+    emitDegradation("main:read-transcript", err);
     process.exit(0);
   }
 

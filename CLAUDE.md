@@ -108,3 +108,16 @@ bun run scripts/detect-tier.ts
 | ---------- | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | 2026-04-21 | cwd del Stop event contamina tags de proyecto | Extraer cwd del primer JSONL entry con `.cwd`                                            |
 | 2026-04-20 | langfuse-web marcado (unhealthy)              | Healthcheck con `$(hostname -i)` porque Next.js bindea a IP del contenedor, no localhost |
+
+## Backlog — decisiones de cierre
+
+### Partial index `trace_id` — NO APLICA (2026-04-24)
+
+El item #5 del backlog (extraído de `atlax-observatorios/projects/orvian/BACKLOG.md`) refería
+a `CREATE UNIQUE INDEX ... WHERE trace_id IS NOT NULL` para una tabla SQL local de audit.
+**Este proyecto no tiene BD local.** Todo el almacenamiento de traces va directamente a Langfuse
+vía API REST (`/api/public/ingestion`). La deduplicación la gestiona Langfuse por `id` de trace
+(upsert idempotente, I-2). El índice es responsabilidad del stack Langfuse, no de este repo.
+
+Si en el futuro se añade una BD local de audit (e.g., SQLite para caché offline o estadísticas
+locales), revisar este ítem.

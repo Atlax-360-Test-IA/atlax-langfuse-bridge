@@ -1,10 +1,12 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { describe, expect, test, beforeEach, afterEach, spyOn } from "bun:test";
 import {
   calcCost,
   getBillingTier,
   detectOS,
   getDevIdentity,
   getProjectName,
+  emitDegradation,
+  type DegradationEntry,
 } from "./langfuse-sync";
 
 // ─── calcCost ───────────────────────────────────────────────────────────────
@@ -148,6 +150,64 @@ describe("getDevIdentity", () => {
     const identity = getDevIdentity();
     // Should be a non-empty string (git email or OS username)
     expect(identity.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── emitDegradation ────────────────────────────────────────────────────────
+
+describe("emitDegradation", () => {
+  test("writes valid JSON to stderr with required fields", () => {
+    const written: string[] = [];
+    const spy = spyOn(process.stderr, "write").mockImplementation(
+      (s: string | Uint8Array) => {
+        written.push(typeof s === "string" ? s : new TextDecoder().decode(s));
+        return true;
+      },
+    );
+
+    emitDegradation("test:source", new Error("something failed"));
+
+    spy.mockRestore();
+
+    expect(written).toHaveLength(1);
+    const parsed = JSON.parse(written[0]!) as DegradationEntry;
+    expect(parsed.type).toBe("degradation");
+    expect(parsed.source).toBe("test:source");
+    expect(parsed.error).toBe("something failed");
+    expect(parsed.ts).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  test("handles non-Error thrown values", () => {
+    const written: string[] = [];
+    const spy = spyOn(process.stderr, "write").mockImplementation(
+      (s: string | Uint8Array) => {
+        written.push(typeof s === "string" ? s : new TextDecoder().decode(s));
+        return true;
+      },
+    );
+
+    emitDegradation("test:source", "string error");
+
+    spy.mockRestore();
+
+    const parsed = JSON.parse(written[0]!) as DegradationEntry;
+    expect(parsed.error).toBe("string error");
+  });
+
+  test("entry is newline-terminated for journald compatibility", () => {
+    const written: string[] = [];
+    const spy = spyOn(process.stderr, "write").mockImplementation(
+      (s: string | Uint8Array) => {
+        written.push(typeof s === "string" ? s : new TextDecoder().decode(s));
+        return true;
+      },
+    );
+
+    emitDegradation("test:source", new Error("x"));
+
+    spy.mockRestore();
+
+    expect(written[0]).toEndWith("\n");
   });
 });
 
