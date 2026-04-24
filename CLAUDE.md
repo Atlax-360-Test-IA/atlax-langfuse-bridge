@@ -121,3 +121,20 @@ vía API REST (`/api/public/ingestion`). La deduplicación la gestiona Langfuse 
 
 Si en el futuro se añade una BD local de audit (e.g., SQLite para caché offline o estadísticas
 locales), revisar este ítem.
+
+### Audit table partitioning — NO APLICA (2026-04-24)
+
+El item #6 del backlog referería a particionado diario/mensual de una tabla de audit
+de hooks. **Este proyecto no tiene tabla de audit local.** Los hooks emiten directamente
+a Langfuse y no persisten nada localmente (excepto `~/.atlax-ai/tier.json`, que es un
+fichero JSON simple, no una tabla relacional).
+
+El particionado aplica al stack Langfuse v3:
+
+- **Postgres**: almacena traces/observations metadata. Langfuse 3.x gestiona su propio
+  schema — si el volumen crece, el equipo de Langfuse publicará migraciones de particionado.
+- **ClickHouse**: ya particiona por defecto (es su modelo nativo de engines MergeTree). No
+  necesita intervención.
+
+Si en el futuro se añade una tabla de audit local (improbable — el valor de observabilidad
+lo proporciona Langfuse), revisar este ítem.
