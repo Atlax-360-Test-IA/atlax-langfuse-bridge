@@ -20,6 +20,7 @@
 
 import { listToolsForAgent, getTool } from "../shared/tools/registry";
 import { toMcpToolset } from "../shared/tools/adapters/mcp-adapter";
+import { withSandbox, getSandboxMode } from "../shared/tools/sandbox";
 import type { AgentType, ToolContext } from "../shared/tools/types";
 
 // ─── Config ─────────────────────────────────────────────────────────────────
@@ -111,11 +112,14 @@ async function handleToolsCall(
     return;
   }
 
-  const tool = getTool(name, AGENT_TYPE);
-  if (!tool) {
+  const baseTool = getTool(name, AGENT_TYPE);
+  if (!baseTool) {
     sendError(id, -32601, `Tool not found or not authorized: ${name}`);
     return;
   }
+  // Envolver con sandbox — si LANGFUSE_BRIDGE_SANDBOX_MODE está sin set
+  // o es "off", devuelve la tool original (no-op).
+  const tool = withSandbox(baseTool);
 
   const validated = tool.validate(args ?? {});
   if (!validated.ok) {
@@ -217,7 +221,9 @@ export async function runServer(): Promise<void> {
 }
 
 if (import.meta.main) {
-  logErr(`starting (agent=${AGENT_TYPE}, budget=${STEP_BUDGET_MS}ms)`);
+  logErr(
+    `starting (agent=${AGENT_TYPE}, budget=${STEP_BUDGET_MS}ms, sandbox=${getSandboxMode()})`,
+  );
   runServer().catch((err: Error) => {
     logErr(`fatal: ${err.message}`);
     process.exit(1);

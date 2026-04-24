@@ -144,3 +144,32 @@ describe("ping", () => {
     expect(res.result).toEqual({});
   });
 });
+
+// ─── sandbox integration ────────────────────────────────────────────────────
+
+describe("sandbox echo via env", () => {
+  const origEnv = { ...process.env };
+  beforeEach(() => {
+    process.env.LANGFUSE_BRIDGE_SANDBOX_MODE = "echo";
+  });
+  // afterEach restores via outer beforeEach reset of writes; restore env explicitly
+  test("tools/call returns echo response without hitting Langfuse", async () => {
+    await dispatch({
+      jsonrpc: "2.0",
+      id: 100,
+      method: "tools/call",
+      params: {
+        name: "query-langfuse-trace",
+        arguments: { traceId: "cc-fake-123" },
+      },
+    });
+    const res = lastResponse();
+    expect(res.error).toBeUndefined();
+    const result = res.result as any;
+    expect(result.isError).toBe(false);
+    const text = JSON.parse(result.content[0].text);
+    expect(text.__sandbox).toBe("echo");
+    expect(text.input).toEqual({ traceId: "cc-fake-123" });
+    process.env = { ...origEnv };
+  });
+});
