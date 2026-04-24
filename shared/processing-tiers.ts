@@ -4,7 +4,7 @@
  * Inspirado en el patrón Orvian `tier-system-bulk-processing.md#1`. Cada hook
  * o tool del bridge declara su tier. El tier determina:
  *
- *   - Si el output es cacheable (tier-cache.ts solo aplica a `cached_llm`).
+ *   - Si el output es cacheable (hash-cache.ts solo aplica a `cached_llm`).
  *   - Si el consumer puede ejecutarlo en batch sin budget check.
  *   - Visibilidad operacional (logging/metrics) — hooks `full_llm` merecen audit
  *     detallado; `deterministic` no.
