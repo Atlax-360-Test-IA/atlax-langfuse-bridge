@@ -35,6 +35,15 @@ function verify() {
   });
 }
 
+function needsOptionalPermission(hostUrl) {
+  try {
+    const u = new URL(hostUrl);
+    return u.hostname !== "localhost" && u.hostname !== "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
 $("save").addEventListener("click", async () => {
   const host = $("host").value.trim();
   const pk = $("pk").value.trim();
@@ -43,6 +52,20 @@ $("save").addEventListener("click", async () => {
   if (!host || !pk || !sk) {
     setStatus("Completa todos los campos", "err");
     return;
+  }
+
+  // Request host permission for remote Langfuse instances.
+  // localhost/127.0.0.1 are already in host_permissions; remotes need this.
+  if (needsOptionalPermission(host)) {
+    const origin = new URL(host).origin + "/*";
+    const granted = await chrome.permissions.request({ origins: [origin] });
+    if (!granted) {
+      setStatus(
+        "Permiso de red denegado — el host Langfuse no será accesible",
+        "err",
+      );
+      return;
+    }
   }
 
   await chrome.storage.sync.set({
