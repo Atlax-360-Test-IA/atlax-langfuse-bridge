@@ -52,6 +52,30 @@ describe("queryLangfuseTrace.validate", () => {
     const r = queryLangfuseTrace.validate({ limit: 0 });
     expect(r.ok).toBe(false);
   });
+
+  test("rejects non-string userId", () => {
+    const r = queryLangfuseTrace.validate({ userId: 42 });
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.error).toContain("userId");
+  });
+
+  test("rejects non-string sessionId", () => {
+    const r = queryLangfuseTrace.validate({ sessionId: true });
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.error).toContain("sessionId");
+  });
+
+  test("rejects non-string fromTimestamp", () => {
+    const r = queryLangfuseTrace.validate({ fromTimestamp: 1234567890 });
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.error).toContain("fromTimestamp");
+  });
+
+  test("rejects non-string toTimestamp", () => {
+    const r = queryLangfuseTrace.validate({ toTimestamp: [] });
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.error).toContain("toTimestamp");
+  });
 });
 
 describe("queryLangfuseTrace metadata", () => {
