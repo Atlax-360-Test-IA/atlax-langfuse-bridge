@@ -1,23 +1,21 @@
 /**
- * Tests for hooks/langfuse-sync.ts — main() flow and sprint-2 invariants.
+ * Tests for hooks/langfuse-sync.ts — exported functions and sprint-2 invariants.
  *
- * Tests the JSONL parsing, entrypoint allowlist (M-2), tier tag emission (N-2),
- * and the sendToLangfuse batch structure via mocked fetch.
+ * Covers: readTierFile, M-2 entrypoint allowlist logic, N-2 tier tag
+ * always-present, subprocess exit-0 invariant (I-1), and cost formula ordering.
  *
- * main() reads from stdin and calls sendToLangfuse internally — we test the
- * exported pure functions plus the batch builder by running the hook as a
- * subprocess with synthetic stdin.
+ * Subprocess tests use import.meta.dir to locate the hook portably across
+ * environments (local WSL + GitHub Actions Ubuntu runner).
  */
 
-import { describe, expect, test, beforeEach, afterEach, spyOn } from "bun:test";
-import { readTierFile, getProjectName, calcCost } from "./langfuse-sync";
+import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
+import { readTierFile, calcCost } from "./langfuse-sync";
 
 // ─── readTierFile ──────────────────────────────────────────────────────────────
 
 describe("readTierFile", () => {
-  test("returns null when tier.json does not exist", () => {
-    // In CI / test environment, ~/.atlax-ai/tier.json likely absent
-    // If it exists, result is a valid TierFile — both cases are valid.
+  test("returns null or a valid TierFile (CI-safe)", () => {
     const result = readTierFile();
     if (result === null) {
       expect(result).toBeNull();
@@ -28,88 +26,51 @@ describe("readTierFile", () => {
       expect(["vertex-gcp", "api-direct", "seat-team", "unknown"]).toContain(
         result.tier,
       );
+      expect(["env-vertex", "env-api-key", "oauth", "none"]).toContain(
+        result.source,
+      );
     }
   });
 });
 
-// ─── entrypoint allowlist (M-2) ───────────────────────────────────────────────
-// These tests validate the logic via a subprocess that runs main() with
-// synthetic JSONL containing various entrypoint values.
+// ─── Subprocess: invariant I-1 (exit 0) ──────────────────────────────────────
 
-const VALID_SESSION_ID = "test-m2-" + Date.now();
+const HOOK_PATH = join(import.meta.dir, "langfuse-sync.ts");
+const REPO_ROOT = join(import.meta.dir, "..");
 
-async function runHook(
-  jsonlLines: string[],
-  stopEvent: Record<string, unknown>,
-): Promise<{ stderr: string; fetchCalls: unknown[] }> {
-  // We can't directly call main() (it reads stdin), so we test the
-  // entrypoint filtering logic by exercising the exported aggregate path
-  // and verifying batch construction via fetch mock.
-  // This is done through a Bun.spawn subprocess with piped stdin.
-  const tmpFile = `/tmp/test-jsonl-${Date.now()}.jsonl`;
-  await Bun.write(tmpFile, jsonlLines.join("\n") + "\n");
-
-  const stdinPayload = JSON.stringify({
-    session_id: stopEvent.session_id ?? VALID_SESSION_ID,
-    transcript_path: tmpFile,
-    cwd: stopEvent.cwd ?? "/tmp",
-    permission_mode: "default",
-    hook_event_name: "Stop",
+describe("main() — invariant I-1 (subprocess, always exit 0)", () => {
+  test("hook exits 0 with empty stdin", async () => {
+    const proc = Bun.spawn(["bun", "run", HOOK_PATH], {
+      cwd: REPO_ROOT,
+      stdin: new TextEncoder().encode(""),
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env },
+    });
+    const exitCode = await proc.exited;
+    expect(exitCode).toBe(0);
   });
 
-  const proc = Bun.spawn(["bun", "run", "hooks/langfuse-sync.ts"], {
-    cwd: "/home/jgcalvo/work/atlax-langfuse-bridge",
-    stdin: new TextEncoder().encode(stdinPayload),
-    stdout: "pipe",
-    stderr: "pipe",
-    env: {
-      ...process.env,
-      LANGFUSE_PUBLIC_KEY: "pk-test",
-      LANGFUSE_SECRET_KEY: "sk-test",
-      LANGFUSE_HOST: "http://127.0.0.1:19999", // port that refuses connections
-    },
+  test("hook exits 0 with malformed JSON stdin", async () => {
+    const proc = Bun.spawn(["bun", "run", HOOK_PATH], {
+      cwd: REPO_ROOT,
+      stdin: new TextEncoder().encode("not-json{{{"),
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env },
+    });
+    const exitCode = await proc.exited;
+    expect(exitCode).toBe(0);
   });
 
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-  await proc.exited;
-
-  return { stderr, fetchCalls: [] };
-}
-
-// ─── Subprocess integration tests (M-2 entrypoint allowlist) ─────────────────
-
-describe("main() — entrypoint allowlist M-2 (subprocess)", () => {
-  test("hook always exits 0 even when Langfuse unreachable", async () => {
-    const lines = [
-      JSON.stringify({
-        type: "summary",
-        timestamp: "2026-04-15T10:00:00.000Z",
-        cwd: "/home/dev/work/project",
-      }),
-      JSON.stringify({
-        type: "assistant",
-        timestamp: "2026-04-15T10:01:00.000Z",
-        message: {
-          role: "assistant",
-          model: "claude-sonnet-4-6",
-          usage: {
-            input_tokens: 1000,
-            output_tokens: 500,
-            service_tier: "standard",
-          },
-        },
-      }),
-    ];
-
-    const proc = Bun.spawn(["bun", "run", "hooks/langfuse-sync.ts"], {
-      cwd: "/home/jgcalvo/work/atlax-langfuse-bridge",
+  test("hook exits 0 when transcript_path does not exist", async () => {
+    const proc = Bun.spawn(["bun", "run", HOOK_PATH], {
+      cwd: REPO_ROOT,
       stdin: new TextEncoder().encode(
         JSON.stringify({
-          session_id: "test-exit-0",
-          transcript_path: `/tmp/test-exit-${Date.now()}.jsonl`,
+          session_id: "test-no-transcript",
+          transcript_path:
+            "/tmp/nonexistent-transcript-" + Date.now() + ".jsonl",
           cwd: "/tmp",
           permission_mode: "default",
           hook_event_name: "Stop",
@@ -124,42 +85,64 @@ describe("main() — entrypoint allowlist M-2 (subprocess)", () => {
         LANGFUSE_HOST: "http://127.0.0.1:19999",
       },
     });
-
-    // Write transcript separately since we can't pass it inline
-    // The hook will fail to read the non-existent file and exit 0
-    const exitCode = await proc.exited;
-    expect(exitCode).toBe(0); // invariant I-1: always exit 0
-  });
-
-  test("hook exits 0 with empty stdin", async () => {
-    const proc = Bun.spawn(["bun", "run", "hooks/langfuse-sync.ts"], {
-      cwd: "/home/jgcalvo/work/atlax-langfuse-bridge",
-      stdin: new TextEncoder().encode(""),
-      stdout: "pipe",
-      stderr: "pipe",
-      env: { ...process.env },
-    });
     const exitCode = await proc.exited;
     expect(exitCode).toBe(0);
   });
 
-  test("hook exits 0 with malformed JSON stdin", async () => {
-    const proc = Bun.spawn(["bun", "run", "hooks/langfuse-sync.ts"], {
-      cwd: "/home/jgcalvo/work/atlax-langfuse-bridge",
-      stdin: new TextEncoder().encode("not-json{{{"),
+  test("hook exits 0 when Langfuse is unreachable (connection refused)", async () => {
+    const transcript = `/tmp/hook-test-${Date.now()}.jsonl`;
+    await Bun.write(
+      transcript,
+      [
+        JSON.stringify({
+          type: "summary",
+          timestamp: "2026-04-15T10:00:00.000Z",
+          cwd: "/tmp/project",
+        }),
+        JSON.stringify({
+          type: "assistant",
+          timestamp: "2026-04-15T10:01:00.000Z",
+          message: {
+            role: "assistant",
+            model: "claude-sonnet-4-6",
+            usage: {
+              input_tokens: 500,
+              output_tokens: 200,
+              service_tier: "standard",
+            },
+          },
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const proc = Bun.spawn(["bun", "run", HOOK_PATH], {
+      cwd: REPO_ROOT,
+      stdin: new TextEncoder().encode(
+        JSON.stringify({
+          session_id: "test-unreachable",
+          transcript_path: transcript,
+          cwd: "/tmp/project",
+          permission_mode: "default",
+          hook_event_name: "Stop",
+        }),
+      ),
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        LANGFUSE_PUBLIC_KEY: "pk-test",
+        LANGFUSE_SECRET_KEY: "sk-test",
+        LANGFUSE_HOST: "http://127.0.0.1:19999",
+      },
     });
     const exitCode = await proc.exited;
     expect(exitCode).toBe(0);
   });
 });
 
-// ─── Batch structure tests (via fetch mock on exported functions) ─────────────
+// ─── M-2 — entrypoint allowlist logic (unit) ─────────────────────────────────
 
 describe("M-2 — entrypoint allowlist logic (unit)", () => {
-  // Test the allowlist logic directly by simulating what main() does
   const KNOWN_ENTRYPOINTS = new Set(["cli", "sdk-ts", "sdk-py", "api"]);
 
   function resolveEntrypoint(raw: string): string {
@@ -188,10 +171,9 @@ describe("M-2 — entrypoint allowlist logic (unit)", () => {
   });
 });
 
-// ─── N-2 — tier tags always present ──────────────────────────────────────────
+// ─── N-2 — tier tags always emitted ──────────────────────────────────────────
 
 describe("N-2 — tier tags always emitted", () => {
-  // Simulate the tag-building logic from main() to verify N-2 fix
   function buildTags(
     tierFile: { tier: string; source: string } | null,
   ): string[] {
@@ -202,13 +184,11 @@ describe("N-2 — tier tags always emitted", () => {
   }
 
   test("emits tier:unknown when tierFile is null", () => {
-    const tags = buildTags(null);
-    expect(tags).toContain("tier:unknown");
+    expect(buildTags(null)).toContain("tier:unknown");
   });
 
   test("emits tier-source:none when tierFile is null", () => {
-    const tags = buildTags(null);
-    expect(tags).toContain("tier-source:none");
+    expect(buildTags(null)).toContain("tier-source:none");
   });
 
   test("emits correct tier when tierFile present (vertex)", () => {
@@ -229,50 +209,42 @@ describe("N-2 — tier tags always emitted", () => {
     expect(tags).toContain("tier-source:oauth");
   });
 
-  test("always emits exactly 2 tier tags (never conditional)", () => {
-    const nullTags = buildTags(null);
-    const presentTags = buildTags({ tier: "vertex-gcp", source: "env-vertex" });
-    const tierNullTags = nullTags.filter(
+  test("always emits exactly 2 tier tags regardless of tierFile presence", () => {
+    const nullTags = buildTags(null).filter(
       (t) => t.startsWith("tier:") || t.startsWith("tier-source:"),
     );
-    const tierPresentTags = presentTags.filter(
-      (t) => t.startsWith("tier:") || t.startsWith("tier-source:"),
-    );
-    expect(tierNullTags).toHaveLength(2);
-    expect(tierPresentTags).toHaveLength(2);
+    const presentTags = buildTags({
+      tier: "vertex-gcp",
+      source: "env-vertex",
+    }).filter((t) => t.startsWith("tier:") || t.startsWith("tier-source:"));
+    expect(nullTags).toHaveLength(2);
+    expect(presentTags).toHaveLength(2);
   });
 });
 
-// ─── sendToLangfuse — batch structure via fetch mock ─────────────────────────
+// ─── Cost formula ordering ────────────────────────────────────────────────────
 
-describe("batch structure integrity", () => {
-  test("calcCost for sonnet matches expected formula", () => {
-    const cost = calcCost(
-      {
-        input_tokens: 10_000,
-        output_tokens: 5_000,
-        cache_creation_input_tokens: 0,
-        cache_read_input_tokens: 0,
-      },
-      "claude-sonnet-4-6",
-    );
-    // (10000*3 + 5000*15) / 1_000_000 = 0.03 + 0.075 = 0.105
-    expect(cost).toBeCloseTo(0.105, 5);
-  });
+describe("cost formula ordering", () => {
+  const usage = {
+    input_tokens: 10_000,
+    output_tokens: 5_000,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 0,
+  };
 
-  test("calcCost for haiku is cheaper than sonnet for same tokens", () => {
-    const usage = {
-      input_tokens: 10_000,
-      output_tokens: 5_000,
-      cache_creation_input_tokens: 0,
-      cache_read_input_tokens: 0,
-    };
+  test("haiku is cheaper than sonnet for same token count", () => {
     const haiku = calcCost(usage, "claude-haiku-4-5-20251001");
     const sonnet = calcCost(usage, "claude-sonnet-4-6");
     expect(haiku).toBeLessThan(sonnet);
   });
 
-  test("calcCost cache_read is cheaper than cache_write", () => {
+  test("sonnet is cheaper than opus for same token count", () => {
+    const sonnet = calcCost(usage, "claude-sonnet-4-6");
+    const opus = calcCost(usage, "claude-opus-4-7");
+    expect(sonnet).toBeLessThan(opus);
+  });
+
+  test("cache_read is cheaper than cache_write per token", () => {
     const writeOnly = calcCost(
       {
         input_tokens: 0,
@@ -292,5 +264,10 @@ describe("batch structure integrity", () => {
       "claude-sonnet-4-6",
     );
     expect(readOnly).toBeLessThan(writeOnly);
+  });
+
+  test("sonnet formula: (10k*3 + 5k*15) / 1M = 0.105", () => {
+    const cost = calcCost(usage, "claude-sonnet-4-6");
+    expect(cost).toBeCloseTo(0.105, 5);
   });
 });
