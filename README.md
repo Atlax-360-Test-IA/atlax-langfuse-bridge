@@ -292,6 +292,126 @@ bun run scripts/provision-keys.ts
 
 ---
 
+## MCP server — tools agénticos sobre el bridge
+
+`scripts/mcp-server.ts` expone los `AgentTool`s del registry como un MCP server stdio. Permite que un agente (Claude Code subagents, Claude Desktop, IDE plugins, Atalaya coordinator) consulte y anote traces de Langfuse desde un prompt.
+
+### Tools disponibles
+
+| Tool                   | Tier         | Cacheable | Para qué                                                                   |
+| ---------------------- | ------------ | --------- | -------------------------------------------------------------------------- |
+| `query-langfuse-trace` | `cached_llm` | ✅        | Lookup por traceId o listado filtrado (userId, tags, timeRange).           |
+| `annotate-observation` | `full_llm`   | ❌        | Postear scores (NUMERIC/CATEGORICAL/BOOLEAN) sobre un trace u observation. |
+
+Cero deps runtime — protocolo JSON-RPC 2.0 implementado a mano.
+
+### Arrancar el server
+
+```bash
+# Producción — el cliente MCP lanza el proceso
+LANGFUSE_PUBLIC_KEY=… LANGFUSE_SECRET_KEY=… bun run scripts/mcp-server.ts
+
+# Modo sandbox (no toca Langfuse) — útil para validar integración
+LANGFUSE_BRIDGE_SANDBOX_MODE=echo bun run scripts/mcp-server.ts
+```
+
+### Variables de entorno
+
+| Variable                       | Default              | Uso                                                                  |
+| ------------------------------ | -------------------- | -------------------------------------------------------------------- |
+| `LANGFUSE_HOST`                | `cloud.langfuse.com` | Endpoint Langfuse (typically `http://localhost:3000` en local).      |
+| `LANGFUSE_PUBLIC_KEY`          | —                    | `pk-lf-…` del proyecto.                                              |
+| `LANGFUSE_SECRET_KEY`          | —                    | `sk-lf-…` del proyecto.                                              |
+| `MCP_AGENT_TYPE`               | `coordinator`        | `coordinator` (todas) \| `trace-analyst` (read-only) \| `annotator`. |
+| `MCP_STEP_BUDGET_MS`           | `10000`              | Budget por tool call que recibe el `ToolContext`.                    |
+| `LANGFUSE_BRIDGE_SANDBOX_MODE` | `off`                | `off` \| `echo` \| `fixture` \| `degradation`.                       |
+
+### Configurar Claude Desktop
+
+Añadir a `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "atlax-langfuse-bridge": {
+      "command": "bun",
+      "args": ["run", "/path/to/atlax-langfuse-bridge/scripts/mcp-server.ts"],
+      "env": {
+        "LANGFUSE_HOST": "http://localhost:3000",
+        "LANGFUSE_PUBLIC_KEY": "pk-lf-…",
+        "LANGFUSE_SECRET_KEY": "sk-lf-…",
+        "MCP_AGENT_TYPE": "coordinator"
+      }
+    }
+  }
+}
+```
+
+Reiniciar Claude Desktop. En cualquier conversación, las tools `query-langfuse-trace` y `annotate-observation` quedan disponibles para el modelo.
+
+### Smoke E2E
+
+`scripts/smoke-mcp-e2e.ts` ejercita el flujo completo (inject → query → cache hit → list by tag → annotate × 2 → round-trip) contra Langfuse real. Skip claro si las credenciales no están en el entorno o Langfuse no responde.
+
+```bash
+bun run scripts/smoke-mcp-e2e.ts
+```
+
+Salida esperada con stack arriba:
+
+```
+[smoke-mcp] ✓ trace injected via /api/public/ingestion
+[smoke-mcp] ✓ trace visible in Langfuse (post-worker ingestion)
+[smoke-mcp] ✓ query-langfuse-trace lookup OK
+[smoke-mcp] ✓ cache hit confirmed (fromCache=true)
+[smoke-mcp] ✓ list by tag smoke-mcp-run:… returned the trace
+[smoke-mcp] ✓ annotate NUMERIC OK (scoreId=…)
+[smoke-mcp] ✓ annotate CATEGORICAL OK (scoreId=…)
+[smoke-mcp] ✓ round-trip: both scores visible in trace.scores[]
+[smoke-mcp] ✅ all checks passed
+```
+
+### Sandbox modes (testing sin red)
+
+| Modo          | Comportamiento                                                                          |
+| ------------- | --------------------------------------------------------------------------------------- |
+| `off`         | Default — ejecución real contra Langfuse.                                               |
+| `echo`        | Devuelve `{ __sandbox: "echo", input }` — verifica conectividad MCP sin tocar Langfuse. |
+| `fixture`     | Devuelve respuesta pregrabada via `registerFixture()` — error si no hay fixture.        |
+| `degradation` | Devuelve `{ __sandbox: "degradation", degradation: [...] }` — testea handling de gaps.  |
+
+La activación es **solo via env** — los inputs de la tool no exponen el modo, así que un integrador no puede activarlo accidentalmente desde producción.
+
+### Adapter para AI SDK v6
+
+Si el consumer usa `ai` SDK (no MCP), `shared/tools/adapters/zod-adapter.ts` mapea `AgentTool` → forma `tool({...})`:
+
+```ts
+import { listToolsForAgent } from "atlax-langfuse-bridge/shared/tools/registry";
+import { buildAiSdkToolset } from "atlax-langfuse-bridge/shared/tools/adapters/zod-adapter";
+
+const toolset = await buildAiSdkToolset(
+  listToolsForAgent("coordinator"),
+  { agentType: "coordinator", stepBudgetMs: 10_000 },
+);
+
+const result = await generateText({ model, tools: toolset, ... });
+```
+
+Zod se carga via dynamic import — el bridge mantiene cero deps runtime, el consumer ya tendrá `zod` en su `package.json`.
+
+### Troubleshooting
+
+| Síntoma                                              | Diagnóstico / fix                                                                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `Tool not found or not authorized` en `tools/call`   | El `MCP_AGENT_TYPE` no tiene autorización para esa tool. Cambia a `coordinator` o revisa `allowedAgentTypes` en el módulo de la tool. |
+| `Langfuse unreachable at …` en smoke E2E             | Stack docker no está arriba. `docker compose ps` para verificar.                                                                      |
+| `trace not visible after 30s` en smoke               | Worker Langfuse caído. `docker compose logs langfuse-worker \| tail -50`.                                                             |
+| El server no aparece en Claude Desktop               | Path absoluto a `mcp-server.ts` correcto en el config; reiniciar la app.                                                              |
+| Score creado pero no aparece en `scores[]` del trace | Latencia del worker (ingestion async). Esperar 5–10s y reintentar.                                                                    |
+
+---
+
 ## Limitaciones conocidas
 
 | Objetivo                            | Estado                                                |
