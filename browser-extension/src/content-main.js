@@ -88,8 +88,16 @@
           }
         }
       }
-    } catch {
-      // Stream cancelled or connection lost — silently ignore
+    } catch (err) {
+      // AbortError = stream cancelled by navigation/tab close — expected, silent
+      if (err?.name !== "AbortError") {
+        console.warn("[atlax-bridge] SSE stream error", {
+          type: "degradation",
+          source: "parseSSE",
+          error: err?.message ?? String(err),
+          ts: new Date().toISOString(),
+        });
+      }
     }
   }
 

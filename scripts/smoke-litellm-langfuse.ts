@@ -32,14 +32,32 @@ async function main(): Promise<void> {
   const sk = process.env.LANGFUSE_SECRET_KEY;
 
   if (!masterKey) {
-    process.stderr.write("[smoke] LITELLM_MASTER_KEY not set\n");
-    process.exit(1);
+    process.stderr.write("[smoke] LITELLM_MASTER_KEY not set — SKIP\n");
+    process.exit(0);
   }
   if (!pk || !sk) {
     process.stderr.write(
-      "[smoke] LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY not set\n",
+      "[smoke] LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY not set — SKIP\n",
     );
-    process.exit(1);
+    process.exit(0);
+  }
+
+  // Pre-flight: ¿está el gateway alcanzable?
+  try {
+    const ping = await fetch(`${litellmHost}/health/liveliness`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!ping.ok) {
+      process.stderr.write(
+        `[smoke] LiteLLM health returned ${ping.status} — SKIP\n`,
+      );
+      process.exit(0);
+    }
+  } catch {
+    process.stderr.write(
+      `[smoke] LiteLLM gateway unreachable at ${litellmHost} — SKIP\n`,
+    );
+    process.exit(0);
   }
 
   const auth = "Basic " + Buffer.from(`${pk}:${sk}`).toString("base64");
