@@ -28,6 +28,10 @@ import { homedir } from "node:os";
 import { spawn } from "node:child_process";
 import { aggregate } from "../shared/aggregate";
 import { emitDegradation } from "../shared/degradation";
+import {
+  getTrace as langfuseGetTrace,
+  type LangfuseTrace,
+} from "../shared/langfuse-client";
 
 const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
   /\/$/,
@@ -51,8 +55,6 @@ if (!PK || !SK) {
   process.exit(1);
 }
 
-const AUTH = "Basic " + Buffer.from(`${PK}:${SK}`).toString("base64");
-
 // ─── Structured JSON logging (journalctl-friendly) ───────────────────────────
 
 function log(
@@ -73,14 +75,9 @@ function log(
 
 // ─── Langfuse fetch ──────────────────────────────────────────────────────────
 
-async function getTrace(id: string): Promise<any | null> {
+async function getTrace(id: string): Promise<LangfuseTrace | null> {
   try {
-    const r = await fetch(`${HOST}/api/public/traces/${id}`, {
-      headers: { Authorization: AUTH },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!r.ok) return null;
-    return await r.json();
+    return await langfuseGetTrace(id, { host: HOST });
   } catch (err) {
     emitDegradation("getTrace:fetch", err);
     return null;
@@ -207,9 +204,13 @@ async function main() {
     if (local.turns === 0) continue;
 
     const remote = await getTrace(tid);
-    const rTurns: number | null = remote?.metadata?.turns ?? null;
-    const rCost: number | null = remote?.metadata?.estimatedCostUSD ?? null;
-    const rEnd: string | null = remote?.metadata?.sessionEnd ?? null;
+    const meta = remote?.metadata ?? null;
+    const rTurns: number | null =
+      typeof meta?.turns === "number" ? meta.turns : null;
+    const rCost: number | null =
+      typeof meta?.estimatedCostUSD === "number" ? meta.estimatedCostUSD : null;
+    const rEnd: string | null =
+      typeof meta?.sessionEnd === "string" ? meta.sessionEnd : null;
 
     const status = !remote
       ? "MISSING"

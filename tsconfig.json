@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "types": ["bun-types"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true
+  },
+  "include": [
+    "hooks/**/*.ts",
+    "scripts/**/*.ts",
+    "shared/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": ["browser-extension", "node_modules"]
+}

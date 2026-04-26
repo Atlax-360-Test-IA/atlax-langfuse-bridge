@@ -1,0 +1,10 @@
+{
+  "name": "atlax-langfuse-bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "bun-types": "latest",
+    "typescript": "^5.4.0"
+  }
+}

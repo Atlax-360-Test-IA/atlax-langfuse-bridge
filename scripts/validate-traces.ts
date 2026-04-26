@@ -17,6 +17,10 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { aggregate } from "../shared/aggregate";
+import {
+  getTrace as langfuseGetTrace,
+  type LangfuseTrace,
+} from "../shared/langfuse-client";
 
 const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
   /\/$/,
@@ -32,20 +36,14 @@ if (!PK || !SK) {
   process.exit(2);
 }
 
-const AUTH = "Basic " + Buffer.from(`${PK}:${SK}`).toString("base64");
 const WINDOW_HOURS = Number(process.env.WINDOW_HOURS ?? "24");
 const COST_EPSILON = 0.01;
 
 // ─── Langfuse fetch ──────────────────────────────────────────────────────────
 
-async function getTrace(id: string): Promise<any | null> {
+async function getTrace(id: string): Promise<LangfuseTrace | null> {
   try {
-    const r = await fetch(`${HOST}/api/public/traces/${id}`, {
-      headers: { Authorization: AUTH },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!r.ok) return null;
-    return await r.json();
+    return await langfuseGetTrace(id, { host: HOST });
   } catch {
     return null;
   }
@@ -123,9 +121,13 @@ async function main() {
     const tid = `cc-${sid}`;
     const local = aggregate(p);
     const remote = await getTrace(tid);
-    const rTurns: number | null = remote?.metadata?.turns ?? null;
-    const rCost: number | null = remote?.metadata?.estimatedCostUSD ?? null;
-    const rEnd: string | null = remote?.metadata?.sessionEnd ?? null;
+    const meta = remote?.metadata ?? null;
+    const rTurns: number | null =
+      typeof meta?.turns === "number" ? meta.turns : null;
+    const rCost: number | null =
+      typeof meta?.estimatedCostUSD === "number" ? meta.estimatedCostUSD : null;
+    const rEnd: string | null =
+      typeof meta?.sessionEnd === "string" ? meta.sessionEnd : null;
 
     const status = !remote
       ? "MISSING"

@@ -8,10 +8,21 @@ import {
 } from "./processing-tiers";
 
 describe("HOOK_TIER_MAP", () => {
-  test("all current hooks are deterministic (zero LLM cost)", () => {
-    for (const [hook, tier] of Object.entries(HOOK_TIER_MAP)) {
-      expect(tier).toBe("deterministic");
+  test("core pipeline hooks are deterministic (zero LLM cost)", () => {
+    const deterministic = [
+      "langfuse-sync",
+      "reconcile-traces",
+      "validate-traces",
+      "detect-tier",
+    ];
+    for (const hook of deterministic) {
+      expect(HOOK_TIER_MAP[hook]).toBe("deterministic");
     }
+  });
+
+  test("agentic tools have correct LLM tiers (in production since PR #8)", () => {
+    expect(HOOK_TIER_MAP["query-langfuse-trace"]).toBe("cached_llm");
+    expect(HOOK_TIER_MAP["annotate-observation"]).toBe("full_llm");
   });
 
   test("includes core hooks", () => {

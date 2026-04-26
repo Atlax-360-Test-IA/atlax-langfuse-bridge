@@ -67,22 +67,15 @@ export function detectTier(): TierFile {
   }
 
   // 3. OAuth session (Claude Code CLI)
+  // I-8: only check existence — never read or parse credentials content.
   const oauth = join(homedir(), ".claude", ".credentials.json");
   if (existsSync(oauth)) {
-    let account: string | null = null;
-    try {
-      const raw = JSON.parse(readFileSync(oauth, "utf-8")) as Record<
-        string,
-        unknown
-      >;
-      const email = raw.claudeAiOauth as Record<string, unknown> | undefined;
-      if (email && typeof email.emailAddress === "string") {
-        account = email.emailAddress;
-      }
-    } catch {
-      // credentials may be in a different shape — ignore
-    }
-    return { tier: "seat-team", source: "oauth", account, detectedAt: now };
+    return {
+      tier: "seat-team",
+      source: "oauth",
+      account: null,
+      detectedAt: now,
+    };
   }
 
   return { tier: "unknown", source: "none", account: null, detectedAt: now };
