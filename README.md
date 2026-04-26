@@ -412,15 +412,71 @@ Zod se carga via dynamic import — el bridge mantiene cero deps runtime, el con
 
 ---
 
+## Browser extension — claude.ai + Claude Desktop App
+
+`browser-extension/` es una extensión Manifest V3 que captura la actividad
+de **claude.ai (chat / projects)** y de **Claude Desktop App (Electron)**.
+La cobertura es complementaria al hook CLI: misma instancia Langfuse, traces
+con prefijo `claude-web-*` (vs `cc-*` del CLI) y tag `entrypoint:claude-ai`.
+
+### Arquitectura
+
+- **`content-main.js`** (MAIN world, `document_start`) — sobreescribe
+  `window.fetch` antes de que la página cargue su JS. Intercepta SSE de
+  `/api/.../chat_conversations/<uuid>/completion`, parsea
+  `message_start` / `message_delta` / `message_stop` y emite un CustomEvent
+  por turno. Cuerpo de la respuesta clonado: la página ve el original.
+- **`content-isolated.js`** (ISOLATED world) — bridge a `chrome.runtime`
+  porque MAIN world no puede llamar al service worker directamente.
+- **`background.js`** (service worker, ESM) — recibe los eventos, calcula
+  coste vía `pricing.js` (espejo de `shared/model-pricing.ts`, cross-validado
+  por test) y hace `POST /api/public/ingestion`. Errores se persisten en
+  `chrome.storage.local` con `degradationLog` (rolling buffer 50 entradas).
+- **`popup.html` + `popup.js`** — configuración de host/public/secret keys,
+  con verificación de conectividad contra `/api/public/health`.
+
+### Tagging
+
+| Tag                             | Valor                                         |
+| ------------------------------- | --------------------------------------------- |
+| `surface:chat \| projects`      | Detectado por URL (`/chats/` vs `/projects/`) |
+| `platform:browser \| app`       | UA Electron → `app`, resto → `browser`        |
+| `tier:claude-web \| claude-app` | Derivado de `platform`                        |
+| `tier-source:browser-extension` | Fuente fija (no se mezcla con tier del CLI)   |
+| `entrypoint:claude-ai`          | Distingue de `entrypoint:cli` del hook        |
+
+### Instalación (modo desarrollador)
+
+```
+1. chrome://extensions → activar "Modo desarrollador"
+2. "Cargar descomprimida" → seleccionar la carpeta browser-extension/
+3. Click en el icono → introducir Langfuse host + public/secret keys
+4. "Guardar y verificar" → debe mostrar "Conectado — Langfuse <version>"
+```
+
+### Diagnóstico
+
+Para ver entradas de degradación (errores de red, ingestión, storage):
+
+```js
+// En la consola del service worker (chrome://extensions → "Inspeccionar vistas: service worker")
+chrome.storage.local
+  .get("degradationLog")
+  .then((r) => console.table(r.degradationLog));
+```
+
+---
+
 ## Limitaciones conocidas
 
-| Objetivo                            | Estado                                                |
-| ----------------------------------- | ----------------------------------------------------- |
-| Claude Code CLI                     | ✅ Cubierto                                           |
-| claude.ai (chat/projects)           | ❌ No genera JSONL local — imposible sin proxy        |
-| IDE extensions (VS Code)            | ⚠️ Parcial — solo si lanzan Claude Code via CLI       |
-| Cuenta corp vs personal             | ❌ Requiere Analytics API (solo Enterprise/API plan)  |
-| Team subscription vs overage exacto | ⚠️ `service_tier: priority` es indicador, no garantía |
+| Objetivo                            | Estado                                                            |
+| ----------------------------------- | ----------------------------------------------------------------- |
+| Claude Code CLI                     | ✅ Cubierto (hook Stop + reconciler)                              |
+| claude.ai (chat/projects)           | ✅ Cubierto vía `browser-extension/` (MV3, intercepta SSE)        |
+| Claude Desktop App (Electron)       | ✅ Cubierto vía la misma extension (UA Electron → `platform:app`) |
+| IDE extensions (VS Code)            | ⚠️ Parcial — solo si lanzan Claude Code via CLI                   |
+| Cuenta corp vs personal             | ❌ Requiere Analytics API (solo Enterprise/API plan)              |
+| Team subscription vs overage exacto | ⚠️ `service_tier: priority` es indicador, no garantía             |
 
 ---
 
