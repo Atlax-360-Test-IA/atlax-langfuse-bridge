@@ -12,8 +12,6 @@
  * detection matches what the hook would produce on a re-run.
  */
 
-import { statSync } from "node:fs";
-import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { aggregate } from "../shared/aggregate";
@@ -21,13 +19,14 @@ import {
   getTrace as langfuseGetTrace,
   type LangfuseTrace,
 } from "../shared/langfuse-client";
+import { COST_EPSILON } from "../shared/constants";
+import { discoverRecentJsonls } from "../shared/jsonl-discovery";
 
 const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
   /\/$/,
   "",
 );
 const WINDOW_HOURS = Number(process.env.WINDOW_HOURS ?? "24");
-const COST_EPSILON = 0.01;
 
 // ─── Langfuse fetch ──────────────────────────────────────────────────────────
 
@@ -37,42 +36,6 @@ async function getTrace(id: string): Promise<LangfuseTrace | null> {
   } catch {
     return null;
   }
-}
-
-// ─── Discover JSONLs ─────────────────────────────────────────────────────────
-
-async function discoverRecentJsonls(windowHours: number): Promise<string[]> {
-  const root = join(homedir(), ".claude", "projects");
-  const cutoff = Date.now() - windowHours * 3_600_000;
-  const found: string[] = [];
-
-  let topDirs: string[];
-  try {
-    topDirs = await readdir(root);
-  } catch {
-    return [];
-  }
-
-  for (const d of topDirs) {
-    const projectDir = join(root, d);
-    let files: string[];
-    try {
-      files = await readdir(projectDir);
-    } catch {
-      continue;
-    }
-    for (const f of files) {
-      if (!f.endsWith(".jsonl")) continue;
-      const p = join(projectDir, f);
-      try {
-        const st = statSync(p);
-        if (st.mtimeMs >= cutoff) found.push(p);
-      } catch {
-        // ignore
-      }
-    }
-  }
-  return found.sort();
 }
 
 // ─── Drift classification ─────────────────────────────────────────────────────

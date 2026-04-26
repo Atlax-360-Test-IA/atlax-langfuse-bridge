@@ -21,34 +21,14 @@
  *   LANGFUSE_SECRET_KEY
  */
 
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { getTrace } from "../shared/langfuse-client";
+import { loadEnvFile } from "../shared/env-loader";
 import { queryLangfuseTrace } from "../shared/tools/query-langfuse-trace";
 import { annotateObservation } from "../shared/tools/annotate-observation";
 import type { ToolContext } from "../shared/tools/types";
-
-// ─── Env loading (mismo patrón que smoke-litellm-langfuse.ts) ───────────────
-
-function loadEnvFile(): void {
-  const envPath = join(homedir(), ".atlax-ai", "reconcile.env");
-  try {
-    const content = readFileSync(envPath, "utf-8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eqIdx = trimmed.indexOf("=");
-      if (eqIdx === -1) continue;
-      const key = trimmed.slice(0, eqIdx);
-      const val = trimmed.slice(eqIdx + 1);
-      if (!process.env[key]) process.env[key] = val;
-    }
-  } catch {
-    // ignore — relies on shell env
-  }
-}
 
 // ─── Pretty logging ─────────────────────────────────────────────────────────
 
