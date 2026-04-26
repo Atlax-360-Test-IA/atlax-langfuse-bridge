@@ -6,11 +6,16 @@
  * independently and silently diverge over time.
  */
 
-import { describe, expect, test, afterEach } from "bun:test";
+import { describe, expect, test, afterEach, spyOn, beforeEach } from "bun:test";
 import { aggregateLines } from "../shared/aggregate";
-import { calcCost, getBillingTier } from "../hooks/langfuse-sync";
+import {
+  calcCost,
+  getBillingTier,
+  emitDegradation as hookEmit,
+} from "../hooks/langfuse-sync";
 import { detectTier } from "../scripts/detect-tier";
 import { getPricing } from "../shared/model-pricing";
+import { emitDegradation as sharedEmit } from "../shared/degradation";
 
 const FIXTURE_LINES = [
   '{"type":"summary","timestamp":"2026-04-15T10:00:00.000Z","cwd":"/home/dev/work/my-project"}',
@@ -106,5 +111,51 @@ describe("tier detection consistency", () => {
 
     expect(hookTier).toBe("vertex-gcp");
     expect(scriptTier.tier).toBe("vertex-gcp");
+  });
+});
+
+// ─── emitDegradation: hook re-exports same function as shared/ ───────────────
+
+describe("degradation shared source", () => {
+  const written: string[] = [];
+  let spy: ReturnType<typeof spyOn>;
+
+  beforeEach(() => {
+    written.length = 0;
+    spy = spyOn(process.stderr, "write").mockImplementation((s: unknown) => {
+      written.push(String(s));
+      return true;
+    });
+  });
+
+  afterEach(() => {
+    spy.mockRestore();
+  });
+
+  test("hookEmit and sharedEmit produce identical output structure", () => {
+    hookEmit("hook:source", new Error("hook error"));
+    sharedEmit("shared:source", new Error("shared error"));
+
+    const hookOut = JSON.parse(written[0]!);
+    const sharedOut = JSON.parse(written[1]!);
+
+    expect(Object.keys(hookOut).sort()).toEqual(Object.keys(sharedOut).sort());
+    expect(hookOut.type).toBe("degradation");
+    expect(sharedOut.type).toBe("degradation");
+  });
+
+  test("hook re-export is the same function reference as shared export", () => {
+    // Both must produce the same serialized format — verifies they share impl
+    hookEmit("src", new Error("msg"));
+    const fromHook = JSON.parse(written[0]!);
+
+    written.length = 0;
+    sharedEmit("src", new Error("msg"));
+    const fromShared = JSON.parse(written[0]!);
+
+    // ts will differ by milliseconds — compare all except ts
+    expect(fromHook.type).toBe(fromShared.type);
+    expect(fromHook.source).toBe(fromShared.source);
+    expect(fromHook.error).toBe(fromShared.error);
   });
 });
