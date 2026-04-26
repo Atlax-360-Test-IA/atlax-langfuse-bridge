@@ -17,9 +17,10 @@
  *   DRY_RUN=1 bun run scripts/provision-keys.ts   # preview sin crear keys
  */
 
-import { readFileSync, writeFileSync, renameSync, mkdirSync } from "node:fs";
+import { writeFileSync, renameSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { loadEnvFile } from "../shared/env-loader";
 
 // ─── Workload definitions ────────────────────────────────────────────────────
 
@@ -55,24 +56,6 @@ const WORKLOADS: WorkloadConfig[] = [
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function loadEnvFile(): void {
-  const envPath = join(homedir(), ".atlax-ai", "reconcile.env");
-  try {
-    const content = readFileSync(envPath, "utf-8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eqIdx = trimmed.indexOf("=");
-      if (eqIdx === -1) continue;
-      const key = trimmed.slice(0, eqIdx);
-      const val = trimmed.slice(eqIdx + 1);
-      if (!process.env[key]) process.env[key] = val;
-    }
-  } catch {
-    // File not found — rely on process.env
-  }
-}
 
 function log(msg: string): void {
   process.stderr.write(`[provision-keys] ${msg}\n`);

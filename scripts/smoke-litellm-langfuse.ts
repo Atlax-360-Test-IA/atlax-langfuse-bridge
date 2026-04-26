@@ -14,29 +14,7 @@
  *   LITELLM_HOST          — URL del gateway (default: http://localhost:4001)
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { homedir } from "node:os";
-
-// ─── Load env from reconcile.env if not already set ──────────────────────────
-
-function loadEnvFile(): void {
-  const envPath = join(homedir(), ".atlax-ai", "reconcile.env");
-  try {
-    const content = readFileSync(envPath, "utf-8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eqIdx = trimmed.indexOf("=");
-      if (eqIdx === -1) continue;
-      const key = trimmed.slice(0, eqIdx);
-      const val = trimmed.slice(eqIdx + 1);
-      if (!process.env[key]) process.env[key] = val;
-    }
-  } catch {
-    // File not found — rely on env vars
-  }
-}
+import { loadEnvFile } from "../shared/env-loader";
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 

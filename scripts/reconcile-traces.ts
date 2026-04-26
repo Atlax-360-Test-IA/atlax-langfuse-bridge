@@ -21,10 +21,7 @@
  *   2 — one or more repairs failed
  */
 
-import { statSync } from "node:fs";
-import { readdir } from "node:fs/promises";
 import { join, dirname, resolve } from "node:path";
-import { homedir } from "node:os";
 import { spawn } from "node:child_process";
 import { aggregate } from "../shared/aggregate";
 import { emitDegradation } from "../shared/degradation";
@@ -32,6 +29,8 @@ import {
   getTrace as langfuseGetTrace,
   type LangfuseTrace,
 } from "../shared/langfuse-client";
+import { COST_EPSILON } from "../shared/constants";
+import { discoverRecentJsonls } from "../shared/jsonl-discovery";
 
 const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
   /\/$/,
@@ -39,7 +38,6 @@ const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
 );
 const WINDOW_HOURS = Number(process.env.WINDOW_HOURS ?? "24");
 const DRY_RUN = process.env.DRY_RUN === "1";
-const COST_EPSILON = 0.01;
 const EXCLUDE_SESSION = process.env.EXCLUDE_SESSION ?? ""; // skip current session
 const HOOK_PATH = resolve(
   dirname(new URL(import.meta.url).pathname),
@@ -75,44 +73,6 @@ async function getTrace(id: string): Promise<LangfuseTrace | null> {
     emitDegradation("getTrace:fetch", err);
     return null;
   }
-}
-
-// ─── Discover JSONLs ─────────────────────────────────────────────────────────
-
-async function discoverRecentJsonls(windowHours: number): Promise<string[]> {
-  const root = join(homedir(), ".claude", "projects");
-  const cutoff = Date.now() - windowHours * 3_600_000;
-  const found: string[] = [];
-
-  let topDirs: string[];
-  try {
-    topDirs = await readdir(root);
-  } catch (err) {
-    emitDegradation("discoverJsonls:readdir-root", err);
-    return [];
-  }
-
-  for (const d of topDirs) {
-    const projectDir = join(root, d);
-    let files: string[];
-    try {
-      files = await readdir(projectDir);
-    } catch (err) {
-      emitDegradation("discoverJsonls:readdir-project", err);
-      continue;
-    }
-    for (const f of files) {
-      if (!f.endsWith(".jsonl")) continue;
-      const p = join(projectDir, f);
-      try {
-        const st = statSync(p);
-        if (st.mtimeMs >= cutoff) found.push(p);
-      } catch (err) {
-        emitDegradation("discoverJsonls:stat", err);
-      }
-    }
-  }
-  return found.sort();
 }
 
 // ─── Replay hook with reconstructed Stop payload ─────────────────────────────
@@ -203,7 +163,7 @@ async function main() {
     process.exit(1);
   }
 
-  const paths = await discoverRecentJsonls(WINDOW_HOURS);
+  const paths = await discoverRecentJsonls(WINDOW_HOURS, emitDegradation);
   log("info", "scan-started", {
     windowHours: WINDOW_HOURS,
     candidates: paths.length,
