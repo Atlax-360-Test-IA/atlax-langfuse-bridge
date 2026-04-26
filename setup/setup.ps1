@@ -14,10 +14,12 @@ $ErrorActionPreference = "Stop"
 # Windows nativo: Claude Code guarda en %APPDATA%\Claude
 $ClaudeDir    = Join-Path $env:APPDATA "Claude"
 $HookDir      = Join-Path $ClaudeDir "hooks"
+$SharedDir    = Join-Path $ClaudeDir "shared"
 $HookScript   = Join-Path $HookDir "langfuse-sync.ts"
 $SettingsFile = Join-Path $ClaudeDir "settings.json"
 $ScriptDir    = Split-Path -Parent $MyInvocation.MyCommand.Path
 $HookSource   = Join-Path $ScriptDir "..\hooks\langfuse-sync.ts"
+$SharedSource = Join-Path $ScriptDir "..\shared"
 
 function Write-Ok($msg)   { Write-Host "  [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "  [!]  $msg" -ForegroundColor Yellow }
@@ -44,8 +46,9 @@ if (-not (Test-Path $ClaudeDir)) {
 }
 Write-Ok "Directorio Claude encontrado: $ClaudeDir"
 
-# ── 3. Install hook script ─────────────────────────────────────────────────────
+# ── 3. Install hook script + shared/ ──────────────────────────────────────────
 New-Item -ItemType Directory -Force -Path $HookDir | Out-Null
+New-Item -ItemType Directory -Force -Path $SharedDir | Out-Null
 
 if (Test-Path $HookSource) {
     Copy-Item -Force $HookSource $HookScript
@@ -56,6 +59,22 @@ if (Test-Path $HookSource) {
         -Uri "https://raw.githubusercontent.com/Atlax-360-Test-IA/atlax-langfuse-bridge/main/hooks/langfuse-sync.ts" `
         -OutFile $HookScript
     Write-Ok "Hook descargado en $HookScript"
+}
+
+# shared/ is required by the hook at import time — copy alongside the hook.
+if (Test-Path $SharedSource) {
+    Copy-Item -Recurse -Force "$SharedSource\*" $SharedDir
+    Write-Ok "shared/ copiado en $SharedDir"
+} else {
+    Write-Warn "Directorio shared/ local no encontrado. Descargando archivos necesarios..."
+    $sharedFiles = @("model-pricing.ts", "degradation.ts", "aggregate.ts",
+                     "hash-cache.ts", "langfuse-client.ts", "processing-tiers.ts")
+    foreach ($f in $sharedFiles) {
+        Invoke-WebRequest `
+            -Uri "https://raw.githubusercontent.com/Atlax-360-Test-IA/atlax-langfuse-bridge/main/shared/$f" `
+            -OutFile (Join-Path $SharedDir $f)
+    }
+    Write-Ok "shared/ descargado en $SharedDir"
 }
 
 # ── 4. Update Claude Code settings.json ───────────────────────────────────────

@@ -197,3 +197,100 @@ describe("buildAiSdkToolset", () => {
     expect(typeof set.t1!.execute).toBe("function");
   });
 });
+
+describe("propertyToZod — uncovered branches", () => {
+  test("boolean property maps via z.boolean", async () => {
+    const boolTool: AgentTool = {
+      name: "bool-tool",
+      description: "x",
+      tier: "deterministic",
+      allowedAgentTypes: ["coordinator"],
+      inputSchema: {
+        type: "object",
+        properties: {
+          flag: { type: "boolean" },
+        },
+        required: ["flag"],
+      },
+      validate: (raw) => ({ ok: true, data: raw }),
+      execute: async () => ({}),
+    };
+    await toAiSdkTool(boolTool, ctx);
+    expect(fakeZ.boolean).toHaveBeenCalled();
+  });
+
+  test("optional boolean calls .optional() on the schema", async () => {
+    const boolTool: AgentTool = {
+      name: "opt-bool-tool",
+      description: "x",
+      tier: "deterministic",
+      allowedAgentTypes: ["coordinator"],
+      inputSchema: {
+        type: "object",
+        properties: {
+          flag: { type: "boolean" },
+        },
+        // no required — so flag is optional
+      },
+      validate: (raw) => ({ ok: true, data: raw }),
+      execute: async () => ({}),
+    };
+    const adapted = await toAiSdkTool(boolTool, ctx);
+    expect(adapted.inputSchema).toBeDefined();
+    const shape = (adapted.inputSchema as any).shape as Record<string, any>;
+    expect(shape["flag"]?.kind).toBe("optional-boolean");
+  });
+
+  test("object property type throws unsupported error", async () => {
+    const nestedTool: AgentTool = {
+      name: "nested-tool",
+      description: "x",
+      tier: "deterministic",
+      allowedAgentTypes: ["coordinator"],
+      inputSchema: {
+        type: "object",
+        properties: {
+          meta: { type: "object" },
+        },
+        required: ["meta"],
+      },
+      validate: (raw) => ({ ok: true, data: raw }),
+      execute: async () => ({}),
+    };
+    let err: Error | null = null;
+    try {
+      await toAiSdkTool(nestedTool, ctx);
+    } catch (e) {
+      err = e as Error;
+    }
+    expect(err).not.toBeNull();
+    expect(err!.message).toContain("nested object properties not supported");
+  });
+
+  test("unknown property type throws descriptive error", async () => {
+    const unknownTool: AgentTool = {
+      name: "unknown-type-tool",
+      description: "x",
+      tier: "deterministic",
+      allowedAgentTypes: ["coordinator"],
+      inputSchema: {
+        type: "object",
+        properties: {
+          x: { type: "integer" as any },
+        },
+        required: ["x"],
+      },
+      validate: (raw) => ({ ok: true, data: raw }),
+      execute: async () => ({}),
+    };
+    let err: Error | null = null;
+    try {
+      await toAiSdkTool(unknownTool, ctx);
+    } catch (e) {
+      err = e as Error;
+    }
+    expect(err).not.toBeNull();
+    expect(err!.message).toContain("unknown property type");
+    expect(err!.message).toContain("integer");
+  });
+});
