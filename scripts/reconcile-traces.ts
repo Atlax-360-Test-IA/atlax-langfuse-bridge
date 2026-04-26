@@ -27,6 +27,7 @@ import { join, dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { spawn } from "node:child_process";
 import { aggregate } from "../shared/aggregate";
+import { emitDegradation } from "../shared/degradation";
 
 const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
   /\/$/,
@@ -80,7 +81,8 @@ async function getTrace(id: string): Promise<any | null> {
     });
     if (!r.ok) return null;
     return await r.json();
-  } catch {
+  } catch (err) {
+    emitDegradation("getTrace:fetch", err);
     return null;
   }
 }
@@ -95,7 +97,8 @@ async function discoverRecentJsonls(windowHours: number): Promise<string[]> {
   let topDirs: string[];
   try {
     topDirs = await readdir(root);
-  } catch {
+  } catch (err) {
+    emitDegradation("discoverJsonls:readdir-root", err);
     return [];
   }
 
@@ -104,7 +107,8 @@ async function discoverRecentJsonls(windowHours: number): Promise<string[]> {
     let files: string[];
     try {
       files = await readdir(projectDir);
-    } catch {
+    } catch (err) {
+      emitDegradation("discoverJsonls:readdir-project", err);
       continue;
     }
     for (const f of files) {
@@ -113,8 +117,8 @@ async function discoverRecentJsonls(windowHours: number): Promise<string[]> {
       try {
         const st = statSync(p);
         if (st.mtimeMs >= cutoff) found.push(p);
-      } catch {
-        // ignore
+      } catch (err) {
+        emitDegradation("discoverJsonls:stat", err);
       }
     }
   }
