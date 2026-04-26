@@ -118,7 +118,7 @@ export const annotateObservation: AgentTool<AnnotateInput, AnnotateOutput> = {
         };
       }
     }
-    return { ok: true, data: r as AnnotateInput };
+    return { ok: true, data: r as unknown as AnnotateInput };
   },
   async execute(input, _ctx) {
     const body: ScoreBody = {

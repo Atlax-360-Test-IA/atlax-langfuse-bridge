@@ -63,7 +63,7 @@ export interface ModelUsage {
 }
 
 export function calcCost(
-  usage: JournalEntry["message"]["usage"],
+  usage: NonNullable<JournalEntry["message"]>["usage"],
   model: string,
 ): number {
   if (!usage) return 0;
@@ -149,10 +149,29 @@ export interface TierFile {
   detectedAt: string;
 }
 
+const VALID_TIERS = new Set([
+  "vertex-gcp",
+  "api-direct",
+  "seat-team",
+  "unknown",
+]);
+const VALID_SOURCES = new Set(["env-vertex", "env-api-key", "oauth", "none"]);
+
 export function readTierFile(): TierFile | null {
   try {
     const p = path.join(os.homedir(), ".atlax-ai", "tier.json");
-    return JSON.parse(readFileSync(p, "utf-8")) as TierFile;
+    const raw = JSON.parse(readFileSync(p, "utf-8")) as Record<string, unknown>;
+    if (
+      !VALID_TIERS.has(raw.tier as string) ||
+      !VALID_SOURCES.has(raw.source as string)
+    ) {
+      emitDegradation(
+        "readTierFile:invalid-shape",
+        new Error(`unexpected tier=${raw.tier} source=${raw.source}`),
+      );
+      return null;
+    }
+    return raw as unknown as TierFile;
   } catch (err) {
     emitDegradation("readTierFile:read", err);
     return null;

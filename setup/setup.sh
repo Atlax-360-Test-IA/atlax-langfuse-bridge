@@ -10,9 +10,11 @@ LANGFUSE_SECRET_KEY="${3:-}"
 
 HOOK_DIR="$HOME/.claude/hooks"
 HOOK_SCRIPT="$HOOK_DIR/langfuse-sync.ts"
+SHARED_DST="$HOME/.claude/shared"
 SETTINGS="$HOME/.claude/settings.json"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOK_SOURCE="$SCRIPT_DIR/../hooks/langfuse-sync.ts"
+SHARED_SOURCE="$SCRIPT_DIR/../shared"
 
 # ── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -39,20 +41,28 @@ if [[ ! -d "$HOME/.claude" ]]; then
 fi
 ok "~/.claude encontrado"
 
-# ── 3. Install hook script ────────────────────────────────────────────────────
+# ── 3. Install hook script + shared/ dependencies ────────────────────────────
 mkdir -p "$HOOK_DIR"
 if [[ -f "$HOOK_SOURCE" ]]; then
   cp "$HOOK_SOURCE" "$HOOK_SCRIPT"
+  chmod +x "$HOOK_SCRIPT"
   ok "Hook instalado en $HOOK_SCRIPT"
+
+  # Copy shared/ so ../shared/* imports resolve from ~/.claude/hooks/
+  if [[ -d "$SHARED_SOURCE" ]]; then
+    mkdir -p "$SHARED_DST"
+    cp -r "$SHARED_SOURCE"/. "$SHARED_DST/"
+    ok "shared/ instalado en $SHARED_DST"
+  else
+    err "shared/ no encontrado en $SHARED_SOURCE — instala desde el repo clonado"
+    exit 1
+  fi
 else
-  # Fallback: download from repo (si se distribuye sin clonar)
-  warn "langfuse-sync.ts no encontrado localmente. Descargando..."
-  curl -fsSL \
-    "https://raw.githubusercontent.com/Atlax-360-Test-IA/atlax-langfuse-bridge/main/hooks/langfuse-sync.ts" \
-    -o "$HOOK_SCRIPT"
-  ok "Hook descargado en $HOOK_SCRIPT"
+  err "hooks/langfuse-sync.ts no encontrado."
+  err "Este script requiere el repo clonado completo, no puede descargar un archivo suelto."
+  err "Clona el repo: git clone https://github.com/Atlax-360-Test-IA/atlax-langfuse-bridge"
+  exit 1
 fi
-chmod +x "$HOOK_SCRIPT"
 
 # ── 4. Update Claude Code settings.json ──────────────────────────────────────
 # Crea settings.json si no existe

@@ -184,8 +184,14 @@ describe("array mapping", () => {
 
 describe("buildAiSdkToolset", () => {
   test("adapts a list of tools into a name → AiSdkTool map", async () => {
-    const t1: AgentTool = { ...stubTool, name: "t1" };
-    const t2: AgentTool = { ...stubTool, name: "t2" };
+    const t1: AgentTool<{ name: string; count?: number }, { ok: boolean }> = {
+      ...stubTool,
+      name: "t1",
+    };
+    const t2: AgentTool<{ name: string; count?: number }, { ok: boolean }> = {
+      ...stubTool,
+      name: "t2",
+    };
     const set = await buildAiSdkToolset([t1, t2], ctx);
     expect(Object.keys(set).sort()).toEqual(["t1", "t2"]);
     expect(typeof set.t1!.execute).toBe("function");

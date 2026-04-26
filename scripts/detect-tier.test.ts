@@ -55,6 +55,16 @@ describe("detectTier", () => {
     expect(["seat-team", "unknown"]).toContain(t.tier);
   });
 
+  test("I-8: OAuth tier never reads credentials content — account is always null", () => {
+    delete process.env.CLAUDE_CODE_USE_VERTEX;
+    delete process.env.ANTHROPIC_API_KEY;
+    const t = detectTier();
+    if (t.tier === "seat-team") {
+      // Invariant I-8: credentials.json must not be parsed — account stays null
+      expect(t.account).toBeNull();
+    }
+  });
+
   test("detectedAt is a valid ISO timestamp", () => {
     const t = detectTier();
     expect(new Date(t.detectedAt).toISOString()).toBe(t.detectedAt);

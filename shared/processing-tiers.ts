@@ -70,9 +70,9 @@ export const HOOK_TIER_MAP: Record<string, ProcessingTier> = {
   // Provision keys — llama a LiteLLM admin API. Zero LLM.
   "provision-keys": "deterministic",
 
-  // Futuro (backlog #3): tools agénticos para análisis de traces.
-  // "query-langfuse-trace": "cached_llm",
-  // "annotate-observation": "full_llm",
+  // Agentic tools — en producción desde PR #8.
+  "query-langfuse-trace": "cached_llm",
+  "annotate-observation": "full_llm",
 };
 
 /**
