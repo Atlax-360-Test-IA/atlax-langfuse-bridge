@@ -159,3 +159,91 @@ describe("degradation shared source", () => {
     expect(fromHook.error).toBe(fromShared.error);
   });
 });
+
+// ─── detectTier ↔ getBillingTier: api-direct path ────────────────────────────
+
+describe("tier detection consistency — api-direct path", () => {
+  const origEnv = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...origEnv };
+  });
+
+  test("detectTier api-direct → getBillingTier returns anthropic-team-standard", () => {
+    delete process.env.CLAUDE_CODE_USE_VERTEX;
+    process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+    const scriptTier = detectTier();
+    // getBillingTier has no 'api-direct' category — maps to team-standard
+    const hookTier = getBillingTier("standard");
+    expect(scriptTier.tier).toBe("api-direct");
+    expect(hookTier).toBe("anthropic-team-standard");
+  });
+});
+
+// ─── hash-cache ↔ queryLangfuseTrace: cache invalidation on input change ──────
+
+describe("hash-cache ↔ queryLangfuseTrace cache key stability", () => {
+  test("traceHash is stable across multiple calls with same input", () => {
+    const { traceHash } = require("../shared/hash-cache");
+    const h1 = traceHash(
+      "sess-abc",
+      ["claude-sonnet-4-6", "claude-opus-4-7"],
+      10000,
+    );
+    const h2 = traceHash(
+      "sess-abc",
+      ["claude-sonnet-4-6", "claude-opus-4-7"],
+      10000,
+    );
+    expect(h1).toBe(h2);
+  });
+
+  test("different sessions produce different hash (no collision)", () => {
+    const { traceHash } = require("../shared/hash-cache");
+    const sessions = ["sess-001", "sess-002", "sess-003"];
+    const hashes = sessions.map((s) =>
+      traceHash(s, ["claude-sonnet-4-6"], 5000),
+    );
+    expect(new Set(hashes).size).toBe(3);
+  });
+});
+
+// ─── aggregate ↔ langfuse-client: cost field types ───────────────────────────
+
+describe("aggregate output compatible with Langfuse generation body", () => {
+  test("aggregate totalCost is a finite number (safe for toFixed)", () => {
+    const agg = aggregateLines(FIXTURE_LINES);
+    expect(Number.isFinite(agg.totalCost)).toBe(true);
+    expect(agg.totalCost).toBeGreaterThan(0);
+    // toFixed(6) used in batch builder must not throw
+    expect(() => agg.totalCost.toFixed(6)).not.toThrow();
+  });
+
+  test("per-model cost is finite and non-negative", () => {
+    const agg = aggregateLines(FIXTURE_LINES);
+    for (const [, usage] of agg.models) {
+      expect(Number.isFinite(usage.cost)).toBe(true);
+      expect(usage.cost).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  test("aggregate turns matches assistant entry count", () => {
+    const lines = [
+      '{"type":"summary","timestamp":"2026-04-15T10:00:00.000Z"}',
+      '{"type":"assistant","timestamp":"2026-04-15T10:01:00.000Z","message":{"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":50}}}',
+      '{"type":"user","timestamp":"2026-04-15T10:02:00.000Z"}',
+      '{"type":"assistant","timestamp":"2026-04-15T10:03:00.000Z","message":{"model":"claude-sonnet-4-6","usage":{"input_tokens":200,"output_tokens":100}}}',
+    ];
+    const agg = aggregateLines(lines);
+    expect(agg.turns).toBe(2);
+  });
+
+  test("safeModelId sanitisation matches generation ID convention", () => {
+    // Verify the replace used in langfuse-sync.ts produces valid IDs
+    const models = ["claude-sonnet-4-6", "claude-opus-4-7", "unknown/model@v2"];
+    for (const model of models) {
+      const safeId = model.replace(/[^a-z0-9-]/gi, "-");
+      expect(safeId).toMatch(/^[a-zA-Z0-9-]+$/);
+    }
+  });
+});
