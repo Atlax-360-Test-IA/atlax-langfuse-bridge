@@ -41,16 +41,34 @@ atlax-langfuse-bridge/
 │   ├── validate-traces.ts       # Smoke test: JSONL local vs Langfuse
 │   ├── reconcile-traces.ts      # Cron job: repara traces con drift
 │   ├── detect-tier.ts           # Escribe ~/.atlax-ai/tier.json
+│   ├── mcp-server.ts            # MCP stdio server (tools agénticas)
+│   ├── provision-keys.ts        # Provisiona virtual keys en LiteLLM
+│   ├── smoke-mcp-e2e.ts         # Smoke E2E contra Langfuse real
 │   └── statusline.sh            # Statusline Claude Code → detect-tier
 ├── shared/
-│   └── model-pricing.ts         # Fuente única pricing (hooks/scripts/LiteLLM)
+│   ├── model-pricing.ts         # Fuente única pricing (I-6)
+│   ├── aggregate.ts             # Agrega JSONL → ModelUsage
+│   ├── degradation.ts           # emitDegradation → stderr JSON
+│   ├── hash-cache.ts            # Cache SHA256 con TTL
+│   ├── langfuse-client.ts       # Cliente REST Langfuse (getTrace, etc.)
+│   ├── processing-tiers.ts      # Taxonomía deterministic/cached_llm/full_llm
+│   └── tools/
+│       ├── query-langfuse-trace.ts  # AgentTool: buscar traces
+│       ├── annotate-observation.ts  # AgentTool: crear scores
+│       ├── sandbox.ts               # Ejecución segura de tools
+│       ├── registry.ts              # Registro global de tools
+│       └── adapters/
+│           ├── zod-adapter.ts       # Adapta AgentTool → AI SDK (Zod)
+│           └── mcp-adapter.ts       # Adapta AgentTool → MCP tool
+├── tests/
+│   ├── cross-validation.test.ts # Invariantes entre módulos
+│   └── e2e-pipeline.test.ts     # JSONL → batch Langfuse
 ├── docs/
-│   ├── plan-fase-1-litellm.md   # Plan SDD Fase 1
 │   └── systemd/                 # User units Linux/WSL del reconciler
 ├── setup/
 │   ├── setup.sh                 # Installer Linux / macOS / WSL
 │   └── setup.ps1                # Installer Windows nativo
-├── browser-extension/           # MV3 capture claude.ai (futuro: MDM push)
+├── browser-extension/           # MV3 captura claude.ai → Langfuse
 └── README.md
 ```
 

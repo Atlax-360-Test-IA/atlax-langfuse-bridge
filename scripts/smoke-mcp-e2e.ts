@@ -103,13 +103,19 @@ async function injectTrace(
   }
 }
 
+function backoffMs(attempt: number, capMs = 5_000): number {
+  const base = Math.min(500 * 2 ** attempt, capMs);
+  return base * (0.8 + Math.random() * 0.4); // ±20% jitter
+}
+
 async function waitForTrace(
   traceId: string,
   maxWaitMs: number,
 ): Promise<boolean> {
   const deadline = Date.now() + maxWaitMs;
+  let attempt = 0;
   while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 2_000));
+    await new Promise((r) => setTimeout(r, backoffMs(attempt++)));
     try {
       const t = await getTrace(traceId);
       if (t) return true;
@@ -273,8 +279,9 @@ async function main(): Promise<number> {
   log("waiting for scores to surface in trace (round-trip)...");
   let roundTripOk = false;
   const rtDeadline = Date.now() + 20_000;
+  let rtAttempt = 0;
   while (Date.now() < rtDeadline) {
-    await new Promise((r) => setTimeout(r, 2_000));
+    await new Promise((r) => setTimeout(r, backoffMs(rtAttempt++)));
     try {
       const trace = await getTrace(traceId);
       const scoreNames =

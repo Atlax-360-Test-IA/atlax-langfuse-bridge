@@ -281,12 +281,19 @@ async function main(): Promise<void> {
   let sessionCwd: string | undefined;
   let turnCount = 0;
 
+  // Allowlist protects Langfuse tags from arbitrary JSONL values (I-4: tags are permanent).
+  const KNOWN_ENTRYPOINTS = new Set(["cli", "sdk-ts", "sdk-py", "api"]);
+
   for (const entry of entries) {
     if (entry.timestamp) {
       sessionStart ??= entry.timestamp;
       sessionEnd = entry.timestamp;
     }
-    if (entry.entrypoint && !entrypoint) entrypoint = entry.entrypoint;
+    if (entry.entrypoint && !entrypoint) {
+      entrypoint = KNOWN_ENTRYPOINTS.has(entry.entrypoint)
+        ? entry.entrypoint
+        : "cli";
+    }
     if (entry.gitBranch && !gitBranch) gitBranch = entry.gitBranch;
     if (entry.cwd && !sessionCwd) sessionCwd = entry.cwd;
     if (entry.type !== "assistant") continue;
@@ -368,8 +375,8 @@ async function main(): Promise<void> {
           ...(billingTier === "vertex-gcp"
             ? ["infra:gcp"]
             : ["infra:anthropic"]),
-          ...(tierFile ? [`tier:${tierFile.tier}`] : []),
-          ...(tierFile ? [`tier-source:${tierFile.source}`] : []),
+          `tier:${tierFile?.tier ?? "unknown"}`,
+          `tier-source:${tierFile?.source ?? "none"}`,
         ],
         metadata: {
           project: projectName,
