@@ -26,16 +26,6 @@ const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
   /\/$/,
   "",
 );
-const PK = process.env.LANGFUSE_PUBLIC_KEY;
-const SK = process.env.LANGFUSE_SECRET_KEY;
-
-if (!PK || !SK) {
-  console.error(
-    "[validate-traces] LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY not set",
-  );
-  process.exit(2);
-}
-
 const WINDOW_HOURS = Number(process.env.WINDOW_HOURS ?? "24");
 const COST_EPSILON = 0.01;
 
@@ -85,6 +75,32 @@ async function discoverRecentJsonls(windowHours: number): Promise<string[]> {
   return found.sort();
 }
 
+// ─── Drift classification ─────────────────────────────────────────────────────
+
+export type DriftStatus =
+  | "OK"
+  | "MISSING"
+  | "TURNS_DRIFT"
+  | "COST_DRIFT"
+  | "END_DRIFT";
+
+export function classifyDrift(
+  local: { turns: number; totalCost: number; end: string | null | undefined },
+  remote: { metadata?: Record<string, unknown> | null } | null,
+): DriftStatus {
+  if (!remote) return "MISSING";
+  const meta = remote.metadata ?? null;
+  const rTurns = typeof meta?.turns === "number" ? meta.turns : null;
+  const rCost =
+    typeof meta?.estimatedCostUSD === "number" ? meta.estimatedCostUSD : null;
+  const rEnd = typeof meta?.sessionEnd === "string" ? meta.sessionEnd : null;
+  if (rTurns !== local.turns) return "TURNS_DRIFT";
+  if (Math.abs((rCost ?? 0) - local.totalCost) > COST_EPSILON)
+    return "COST_DRIFT";
+  if (rEnd !== local.end) return "END_DRIFT";
+  return "OK";
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 interface Row {
@@ -101,6 +117,15 @@ interface Row {
 }
 
 async function main() {
+  const PK = process.env.LANGFUSE_PUBLIC_KEY;
+  const SK = process.env.LANGFUSE_SECRET_KEY;
+  if (!PK || !SK) {
+    console.error(
+      "[validate-traces] LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY not set",
+    );
+    process.exit(2);
+  }
+
   const argPaths = process.argv.slice(2);
   const paths =
     argPaths.length > 0 ? argPaths : await discoverRecentJsonls(WINDOW_HOURS);
@@ -121,6 +146,7 @@ async function main() {
     const tid = `cc-${sid}`;
     const local = aggregate(p);
     const remote = await getTrace(tid);
+    const status = classifyDrift({ ...local, end: local.end ?? null }, remote);
     const meta = remote?.metadata ?? null;
     const rTurns: number | null =
       typeof meta?.turns === "number" ? meta.turns : null;
@@ -128,16 +154,6 @@ async function main() {
       typeof meta?.estimatedCostUSD === "number" ? meta.estimatedCostUSD : null;
     const rEnd: string | null =
       typeof meta?.sessionEnd === "string" ? meta.sessionEnd : null;
-
-    const status = !remote
-      ? "MISSING"
-      : rTurns !== local.turns
-        ? "TURNS_DRIFT"
-        : Math.abs((rCost ?? 0) - local.totalCost) > COST_EPSILON
-          ? "COST_DRIFT"
-          : rEnd !== local.end
-            ? "END_DRIFT"
-            : "OK";
 
     rows.push({
       session: sid.slice(0, 8),
@@ -166,7 +182,9 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error(`[validate-traces] ${err.message}`);
-  process.exit(2);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(`[validate-traces] ${err.message}`);
+    process.exit(2);
+  });
+}

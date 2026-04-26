@@ -81,7 +81,7 @@ export function detectTier(): TierFile {
   return { tier: "unknown", source: "none", account: null, detectedAt: now };
 }
 
-function writeIfChanged(tier: TierFile): boolean {
+export function writeIfChanged(tier: TierFile): boolean {
   if (!existsSync(TIER_DIR)) mkdirSync(TIER_DIR, { recursive: true });
 
   // Only rewrite when tier or source changes (detectedAt churn is not a
@@ -109,7 +109,7 @@ function writeIfChanged(tier: TierFile): boolean {
   return true;
 }
 
-function labelFor(t: TierFile): string {
+export function labelFor(t: TierFile): string {
   const icons: Record<BillingTier, string> = {
     "vertex-gcp": "☁ vertex",
     "api-direct": "⚡ api",
