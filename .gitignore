@@ -21,3 +21,6 @@ tests/fixtures/*.tmp.jsonl
 # Build outputs
 dist/
 *.js.map
+
+# Local session handoffs (not for the repo)
+.handoff-*.md
