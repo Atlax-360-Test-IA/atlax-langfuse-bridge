@@ -37,15 +37,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 });
 
+// ── Storage helpers ────────────────────────────────────────────────────────
+// langfuseHost + publicKey: non-sensitive, can sync across devices.
+// secretKey: credential — stays device-local only (chrome.storage.local).
+async function getConfig() {
+  const [sync, local] = await Promise.all([
+    chrome.storage.sync.get(["langfuseHost", "publicKey"]),
+    chrome.storage.local.get(["secretKey"]),
+  ]);
+  return { ...sync, ...local };
+}
+
 // ── Core: send turn to Langfuse ────────────────────────────────────────────
 async function handleTurn(turn) {
   let cfg;
   try {
-    cfg = await chrome.storage.sync.get([
-      "langfuseHost",
-      "publicKey",
-      "secretKey",
-    ]);
+    cfg = await getConfig();
   } catch (err) {
     await emitDegradation("handleTurn:storage-get", err);
     return;
@@ -100,7 +107,7 @@ async function handleTurn(turn) {
       type: "generation-create",
       timestamp: now,
       body: {
-        id: `${traceId}-${Date.now()}`,
+        id: `${traceId}-${now}`,
         traceId,
         name: turn.model || "claude-web",
         model: turn.model || "unknown",
@@ -147,11 +154,7 @@ async function handleTurn(turn) {
 async function testConnection() {
   let cfg;
   try {
-    cfg = await chrome.storage.sync.get([
-      "langfuseHost",
-      "publicKey",
-      "secretKey",
-    ]);
+    cfg = await getConfig();
   } catch (err) {
     await emitDegradation("testConnection:storage-get", err);
     return { ok: false, error: "storage no disponible" };
