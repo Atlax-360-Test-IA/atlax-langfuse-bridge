@@ -5,11 +5,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  classifyDrift,
-  SAFE_SID_RE,
-  type DriftStatus,
-} from "./reconcile-traces";
+import { classifyDrift, type DriftStatus } from "../shared/drift";
+import { SAFE_SID_RE } from "./reconcile-traces";
 
 // ─── classifyDrift ────────────────────────────────────────────────────────────
 
