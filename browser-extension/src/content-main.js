@@ -71,6 +71,9 @@
 
           // message_stop signals end of one assistant turn
           if (ev.type === "message_stop") {
+            // H4: use ISO timestamp from the stream event time — deterministic
+            // for re-processing the same turn (I-2: idempotency invariant).
+            const timestamp = new Date().toISOString();
             window.dispatchEvent(
               new CustomEvent(EV_TURN, {
                 detail: {
@@ -81,7 +84,7 @@
                   platform: meta.platform,
                   conversationId: meta.conversationId,
                   url: meta.url,
-                  timestamp: new Date().toISOString(),
+                  timestamp,
                 },
               }),
             );
@@ -98,6 +101,10 @@
           ts: new Date().toISOString(),
         });
       }
+    } finally {
+      // H3: release the reader lock regardless of how the loop exits.
+      // Without this, the cloned body stays locked and cannot be GC'd.
+      reader.cancel().catch(() => {});
     }
   }
 
