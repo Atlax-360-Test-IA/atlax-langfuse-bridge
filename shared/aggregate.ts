@@ -15,6 +15,8 @@ export interface AggregateResult {
   start?: string | undefined;
   end?: string | undefined;
   cwd?: string | undefined;
+  gitBranch?: string | undefined;
+  entrypoint?: string | undefined;
   models: Map<string, ModelAgg>;
 }
 
@@ -41,6 +43,9 @@ export function aggregate(path: string): AggregateResult {
 /**
  * Core aggregation from pre-split lines (testable without filesystem).
  */
+// Allowlist protects Langfuse tags from arbitrary JSONL values (I-4: tags are permanent).
+const KNOWN_ENTRYPOINTS = new Set(["cli", "sdk-ts", "sdk-py", "api"]);
+
 export function aggregateLines(lines: string[]): AggregateResult {
   const models = new Map<string, ModelAgg>();
   let turns = 0;
@@ -48,6 +53,8 @@ export function aggregateLines(lines: string[]): AggregateResult {
   let start: string | undefined;
   let end: string | undefined;
   let cwd: string | undefined;
+  let gitBranch: string | undefined;
+  let entrypoint: string | undefined;
 
   for (const l of lines) {
     let e: Record<string, unknown>;
@@ -62,6 +69,13 @@ export function aggregateLines(lines: string[]): AggregateResult {
       end = e["timestamp"];
     }
     if (e["cwd"] && typeof e["cwd"] === "string" && !cwd) cwd = e["cwd"];
+    if (e["gitBranch"] && typeof e["gitBranch"] === "string" && !gitBranch)
+      gitBranch = e["gitBranch"];
+    if (e["entrypoint"] && typeof e["entrypoint"] === "string" && !entrypoint) {
+      entrypoint = KNOWN_ENTRYPOINTS.has(e["entrypoint"])
+        ? e["entrypoint"]
+        : "cli";
+    }
     if (e["type"] !== "assistant") continue;
 
     const msg = e["message"] as Record<string, unknown> | undefined;
@@ -108,5 +122,5 @@ export function aggregateLines(lines: string[]): AggregateResult {
     }
   }
 
-  return { turns, totalCost, start, end, cwd, models };
+  return { turns, totalCost, start, end, cwd, gitBranch, entrypoint, models };
 }

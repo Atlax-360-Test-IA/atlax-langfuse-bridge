@@ -24,19 +24,25 @@
 import { join, dirname, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { aggregate } from "../shared/aggregate";
+import { classifyDrift, type DriftStatus } from "../shared/drift";
 import { emitDegradation } from "../shared/degradation";
 import {
   getTrace as langfuseGetTrace,
   type LangfuseTrace,
 } from "../shared/langfuse-client";
-import { COST_EPSILON } from "../shared/constants";
 import { discoverRecentJsonls } from "../shared/jsonl-discovery";
 
 const HOST = (process.env["LANGFUSE_HOST"] ?? "http://localhost:3000").replace(
   /\/$/,
   "",
 );
-const WINDOW_HOURS = Number(process.env["WINDOW_HOURS"] ?? "24");
+
+const MAX_WINDOW_HOURS = 8760; // 1 year cap — prevents runaway stat calls
+const _rawWindow = Number(process.env["WINDOW_HOURS"] ?? "24");
+const WINDOW_HOURS =
+  Number.isFinite(_rawWindow) && _rawWindow > 0
+    ? Math.min(_rawWindow, MAX_WINDOW_HOURS)
+    : 24;
 const DRY_RUN = process.env["DRY_RUN"] === "1";
 const EXCLUDE_SESSION = process.env["EXCLUDE_SESSION"] ?? ""; // skip current session
 const HOOK_PATH = resolve(
@@ -141,35 +147,6 @@ async function replayHook(
     proc.stdin.write(payload);
     proc.stdin.end();
   });
-}
-
-// ─── Drift classification ─────────────────────────────────────────────────────
-
-export type DriftStatus =
-  | "OK"
-  | "MISSING"
-  | "TURNS_DRIFT"
-  | "COST_DRIFT"
-  | "END_DRIFT";
-
-export function classifyDrift(
-  local: { turns: number; totalCost: number; end: string | null | undefined },
-  remote: { metadata?: Record<string, unknown> | null } | null,
-): DriftStatus {
-  if (!remote) return "MISSING";
-  const meta = remote.metadata ?? null;
-  const rTurns = typeof meta?.["turns"] === "number" ? meta["turns"] : null;
-  const rCost =
-    typeof meta?.["estimatedCostUSD"] === "number"
-      ? meta["estimatedCostUSD"]
-      : null;
-  const rEnd =
-    typeof meta?.["sessionEnd"] === "string" ? meta["sessionEnd"] : null;
-  if (rTurns !== local.turns) return "TURNS_DRIFT";
-  if (Math.abs((rCost ?? 0) - local.totalCost) > COST_EPSILON)
-    return "COST_DRIFT";
-  if (rEnd !== local.end) return "END_DRIFT";
-  return "OK";
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────

@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import * as os from "node:os";
 import * as path from "node:path";
 import { getPricing } from "../shared/model-pricing";
+import { aggregateLines } from "../shared/aggregate";
 import { emitDegradation } from "../shared/degradation";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -261,85 +262,29 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const entries: JournalEntry[] = [];
-  for (const line of lines) {
-    try {
-      entries.push(JSON.parse(line) as JournalEntry);
-    } catch {
-      // skip malformed lines
-    }
-  }
+  // Aggregate usage via shared/aggregate (single source of truth for token/cost logic)
+  const agg = aggregateLines(lines);
 
-  // Aggregate usage
-  const usageByModel = new Map<string, ModelUsage>();
-  let sessionStart: string | undefined;
-  let sessionEnd: string | undefined;
-  let entrypoint: string | undefined;
-  let gitBranch: string | undefined;
-  let sessionCwd: string | undefined;
-  let turnCount = 0;
-
-  // Allowlist protects Langfuse tags from arbitrary JSONL values (I-4: tags are permanent).
-  const KNOWN_ENTRYPOINTS = new Set(["cli", "sdk-ts", "sdk-py", "api"]);
-
-  for (const entry of entries) {
-    if (entry.timestamp) {
-      sessionStart ??= entry.timestamp;
-      sessionEnd = entry.timestamp;
-    }
-    if (entry.entrypoint && !entrypoint) {
-      entrypoint = KNOWN_ENTRYPOINTS.has(entry.entrypoint)
-        ? entry.entrypoint
-        : "cli";
-    }
-    if (entry.gitBranch && !gitBranch) gitBranch = entry.gitBranch;
-    if (entry.cwd && !sessionCwd) sessionCwd = entry.cwd;
-    if (entry.type !== "assistant") continue;
-
-    const usage = entry.message?.usage;
-    const model = entry.message?.model ?? "unknown";
-    if (!usage) continue;
-
-    turnCount++;
-    const cost = calcCost(usage, model);
-    const tier = usage.service_tier ?? "";
-
-    const existing = usageByModel.get(model);
-    if (!existing) {
-      usageByModel.set(model, {
-        inputTokens: usage.input_tokens ?? 0,
-        outputTokens: usage.output_tokens ?? 0,
-        cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
-        cacheReadTokens: usage.cache_read_input_tokens ?? 0,
-        costUSD: cost,
-        serviceTier: tier,
-        turns: 1,
-      });
-    } else {
-      existing.inputTokens += usage.input_tokens ?? 0;
-      existing.outputTokens += usage.output_tokens ?? 0;
-      existing.cacheCreationTokens += usage.cache_creation_input_tokens ?? 0;
-      existing.cacheReadTokens += usage.cache_read_input_tokens ?? 0;
-      existing.costUSD += cost;
-      if (tier) existing.serviceTier = tier;
-      existing.turns++;
-    }
-  }
-
-  if (usageByModel.size === 0) process.exit(0); // no billable usage
+  if (agg.models.size === 0) process.exit(0); // no billable usage
 
   // Determine billing context
-  const costEntries = [...usageByModel.values()];
-  const totalCost = costEntries.reduce((s, m) => s + m.costUSD, 0);
-  const dominantTier = costEntries.sort((a, b) => b.costUSD - a.costUSD)[0]
+  const costEntries = [...agg.models.values()];
+  const totalCost = agg.totalCost;
+  const dominantTier = costEntries.sort((a, b) => b.cost - a.cost)[0]
     ?.serviceTier;
   const billingTier = getBillingTier(dominantTier);
+
+  const sessionStart = agg.start;
+  const sessionEnd = agg.end;
+  const entrypoint = agg.entrypoint;
+  const gitBranch = agg.gitBranch;
+  const turnCount = agg.turns;
 
   // Prefer cwd from first JSONL entry (captures the real session origin),
   // fall back to Stop event cwd. Fixes tag contamination when Claude Code
   // runs the hook from a different working directory than where the
   // session actually started.
-  const effectiveCwd = sessionCwd ?? cwd;
+  const effectiveCwd = agg.cwd ?? cwd;
 
   const devEmail = getDevIdentity();
   const projectName = getProjectName(effectiveCwd);
@@ -390,7 +335,7 @@ async function main(): Promise<void> {
           sessionStart: sessionStart ?? null,
           sessionEnd: sessionEnd ?? null,
           estimatedCostUSD: Number(totalCost.toFixed(6)),
-          modelsUsed: [...usageByModel.keys()],
+          modelsUsed: [...agg.models.keys()],
         },
         input: { turns: turnCount },
         output: { estimatedCostUSD: totalCost },
@@ -399,7 +344,7 @@ async function main(): Promise<void> {
   ];
 
   // One generation per model
-  for (const [model, usage] of usageByModel) {
+  for (const [model, usage] of agg.models) {
     const safeModelId = model.replace(/[^a-z0-9-]/gi, "-");
     batch.push({
       id: randomUUID(),
@@ -421,7 +366,7 @@ async function main(): Promise<void> {
           unit: "TOKENS",
         },
         costDetails: {
-          estimatedUSD: Number(usage.costUSD.toFixed(6)),
+          estimatedUSD: Number(usage.cost.toFixed(6)),
         },
         metadata: {
           cacheCreationTokens: usage.cacheCreationTokens,

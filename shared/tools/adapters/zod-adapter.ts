@@ -143,9 +143,8 @@ export async function buildAiSdkToolset(
   tools: Array<AgentTool<any, any>>,
   ctx: ToolContext,
 ): Promise<Record<string, AiSdkTool>> {
-  const out: Record<string, AiSdkTool> = {};
-  for (const t of tools) {
-    out[t.name] = await toAiSdkTool(t, ctx);
-  }
-  return out;
+  const entries = await Promise.all(
+    tools.map(async (t) => [t.name, await toAiSdkTool(t, ctx)] as const),
+  );
+  return Object.fromEntries(entries);
 }

@@ -25,8 +25,23 @@ import type { AgentType, ToolContext } from "../shared/tools/types";
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 
-const AGENT_TYPE: AgentType =
-  (process.env["MCP_AGENT_TYPE"] as AgentType) || "coordinator";
+const VALID_AGENT_TYPES: ReadonlySet<AgentType> = new Set([
+  "coordinator",
+  "trace-analyst",
+  "annotator",
+]);
+
+function resolveAgentType(): AgentType {
+  const raw = process.env["MCP_AGENT_TYPE"];
+  if (raw && VALID_AGENT_TYPES.has(raw as AgentType)) return raw as AgentType;
+  if (raw)
+    process.stderr.write(
+      `[mcp-server] unknown MCP_AGENT_TYPE="${raw}", falling back to "coordinator"\n`,
+    );
+  return "coordinator";
+}
+
+const AGENT_TYPE: AgentType = resolveAgentType();
 const STEP_BUDGET_MS = Number(process.env["MCP_STEP_BUDGET_MS"] ?? "10000");
 const SERVER_NAME = "atlax-langfuse-bridge";
 const SERVER_VERSION = "0.1.0";
