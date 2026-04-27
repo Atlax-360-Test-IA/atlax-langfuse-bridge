@@ -1,0 +1,211 @@
+# cloud-run.yaml — REFERENCE manifest for migrating Langfuse v3 to Cloud Run.
+#
+# === STATUS: REFERENCE ONLY — NOT APPLIED IN CI =============================
+#
+# This file documents the target topology for PRO migration (see CLAUDE.md
+# invariant I-13 for what stays local vs what moves to Cloud Run).
+#
+# Two Cloud Run services: langfuse-web (HTTP API + UI) and langfuse-worker
+# (background event processor). Both share the same connections to Cloud SQL,
+# Memorystore, ClickHouse Cloud, and GCS.
+#
+# To deploy (when ready):
+#   1. Create Cloud SQL Postgres instance with PITR enabled (see backup-story.md)
+#   2. Provision Memorystore Redis (Standard tier, ≥1 GB for HA)
+#   3. Provision ClickHouse Cloud OR self-host on GKE with BACKUP TO S3
+#   4. Create GCS bucket with Object Versioning + 90-day lifecycle policy
+#   5. Store all secrets in Secret Manager (NEVER in this YAML)
+#   6. gcloud run services replace cloud-run.yaml
+#
+# What CANNOT migrate to Cloud Run (per invariant I-13):
+#   - hooks/langfuse-sync.ts        — needs filesystem access to JSONLs
+#   - scripts/reconcile-traces.ts   — needs ~/.claude/projects scan
+#   - scripts/detect-tier.ts        — needs ~/.claude/.credentials.json check
+#   - scripts/backup-langfuse.sh    — uses docker exec (and refuses to run via K_SERVICE guard)
+#   - browser-extension/            — runs in dev's Chrome
+#
+# These remain on each developer's machine. The hook posts to LANGFUSE_HOST
+# pointing at the Cloud Run URL.
+
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: langfuse-web
+  labels:
+    cloud.googleapis.com/location: europe-west1
+  annotations:
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        # CPU always allocated — required for the worker mode and SSE responses.
+        run.googleapis.com/cpu-throttling: "false"
+        # Min instances = 1 to avoid cold starts during dev hours (38 devs).
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+        # Cloud SQL connection via Unix socket (preferred over TCP).
+        run.googleapis.com/cloudsql-instances: PROJECT:europe-west1:langfuse-pg
+        # VPC connector for Memorystore + ClickHouse private endpoint.
+        run.googleapis.com/vpc-access-connector: projects/PROJECT/locations/europe-west1/connectors/langfuse-vpc
+        run.googleapis.com/vpc-access-egress: private-ranges-only
+    spec:
+      serviceAccountName: langfuse-web@PROJECT.iam.gserviceaccount.com
+      containerConcurrency: 80
+      timeoutSeconds: 60
+      containers:
+        - image: langfuse/langfuse:3
+          ports:
+            - name: http1
+              containerPort: 3000
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          # Healthcheck — Langfuse exposes /api/public/health.
+          startupProbe:
+            httpGet:
+              path: /api/public/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/public/health
+              port: 3000
+            periodSeconds: 30
+            failureThreshold: 3
+            timeoutSeconds: 5
+          env:
+            # Database — Cloud SQL via socket
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-database-url
+                  key: latest
+            # Redis — Memorystore private IP
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-redis-host
+                  key: latest
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-redis-auth
+                  key: latest
+            # ClickHouse — separate cluster
+            - name: CLICKHOUSE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-clickhouse-url
+                  key: latest
+            - name: CLICKHOUSE_USER
+              value: default
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-clickhouse-password
+                  key: latest
+            # S3 → GCS bucket with HMAC keys
+            - name: LANGFUSE_S3_EVENT_UPLOAD_BUCKET
+              value: atlax-langfuse-events
+            - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
+              value: europe-west1
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT
+              value: https://storage.googleapis.com
+            - name: LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE
+              value: "true"
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-gcs-hmac-id
+                  key: latest
+            - name: LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-gcs-hmac-secret
+                  key: latest
+            # Auth secrets
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-nextauth-secret
+                  key: latest
+            - name: SALT
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-salt
+                  key: latest
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-encryption-key
+                  key: latest
+            # Telemetry off in PRO until reviewed by legal/compliance
+            - name: TELEMETRY_ENABLED
+              value: "false"
+  traffic:
+    - percent: 100
+      latestRevision: true
+
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: langfuse-worker
+  labels:
+    cloud.googleapis.com/location: europe-west1
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cpu-throttling: "false"
+        # Worker is event-driven: keep ≥1 alive for low-latency processing.
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "5"
+        run.googleapis.com/cloudsql-instances: PROJECT:europe-west1:langfuse-pg
+        run.googleapis.com/vpc-access-connector: projects/PROJECT/locations/europe-west1/connectors/langfuse-vpc
+        run.googleapis.com/vpc-access-egress: private-ranges-only
+    spec:
+      serviceAccountName: langfuse-worker@PROJECT.iam.gserviceaccount.com
+      containerConcurrency: 1
+      timeoutSeconds: 300
+      containers:
+        - image: langfuse/langfuse-worker:3
+          ports:
+            - name: http1
+              containerPort: 3030
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 3030
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3030
+            periodSeconds: 30
+            failureThreshold: 3
+          # Same env block as langfuse-web — omitted here for brevity.
+          # In real deploy, copy the env list from langfuse-web above.
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-database-url
+                  key: latest
+  traffic:
+    - percent: 100
+      latestRevision: true
