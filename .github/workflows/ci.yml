@@ -11,8 +11,11 @@ permissions:
 
 jobs:
   test:
-    name: Typecheck + Unit tests
-    runs-on: ubuntu-latest
+    name: Typecheck + Unit tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     permissions:
       contents: read
     steps:

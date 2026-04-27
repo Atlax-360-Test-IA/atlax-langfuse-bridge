@@ -10,7 +10,7 @@
  * and drops them without error).
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, beforeAll } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { aggregateLines } from "../shared/aggregate";
@@ -18,9 +18,13 @@ import { calcCost } from "../hooks/langfuse-sync";
 import { getPricing } from "../shared/model-pricing";
 
 const FIXTURE_PATH = join(import.meta.dir, "fixtures", "session.jsonl");
-const FIXTURE_LINES = readFileSync(FIXTURE_PATH, "utf-8")
-  .split("\n")
-  .filter(Boolean);
+let FIXTURE_LINES: string[] = [];
+
+beforeAll(() => {
+  FIXTURE_LINES = readFileSync(FIXTURE_PATH, "utf-8")
+    .split("\n")
+    .filter(Boolean);
+});
 
 // ─── Simulate the batch-building logic from langfuse-sync.ts ────────────────
 
@@ -95,7 +99,11 @@ function buildBatch(
 
 describe("E2E pipeline: JSONL → Langfuse batch", () => {
   const SESSION_ID = "test-abc-123";
-  const batch = buildBatch(SESSION_ID, FIXTURE_LINES);
+  let batch: ReturnType<typeof buildBatch>;
+
+  beforeAll(() => {
+    batch = buildBatch(SESSION_ID, FIXTURE_LINES);
+  });
 
   test("trace has correct type and traceId", () => {
     expect(batch.trace["type"]).toBe("trace-create");

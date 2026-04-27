@@ -85,11 +85,19 @@ describe("pricing fallback consistency", () => {
 
 // ─── Tier detection consistency ─────────────────────────────────────────────
 
+const XVAL_ENV_KEYS = ["CLAUDE_CODE_USE_VERTEX", "ANTHROPIC_API_KEY"] as const;
+
 describe("tier detection consistency", () => {
-  const origEnv = { ...process.env };
+  const xvalSaved: Partial<Record<(typeof XVAL_ENV_KEYS)[number], string>> = {};
+  for (const k of XVAL_ENV_KEYS) {
+    if (process.env[k] !== undefined) xvalSaved[k] = process.env[k];
+  }
 
   afterEach(() => {
-    process.env = { ...origEnv };
+    for (const k of XVAL_ENV_KEYS) {
+      if (xvalSaved[k] !== undefined) process.env[k] = xvalSaved[k];
+      else delete process.env[k];
+    }
   });
 
   test("getBillingTier vertex matches detectTier vertex", () => {
@@ -161,10 +169,17 @@ describe("degradation shared source", () => {
 // ─── detectTier ↔ getBillingTier: api-direct path ────────────────────────────
 
 describe("tier detection consistency — api-direct path", () => {
-  const origEnv = { ...process.env };
+  const xvalSaved2: Partial<Record<(typeof XVAL_ENV_KEYS)[number], string>> =
+    {};
+  for (const k of XVAL_ENV_KEYS) {
+    if (process.env[k] !== undefined) xvalSaved2[k] = process.env[k];
+  }
 
   afterEach(() => {
-    process.env = { ...origEnv };
+    for (const k of XVAL_ENV_KEYS) {
+      if (xvalSaved2[k] !== undefined) process.env[k] = xvalSaved2[k];
+      else delete process.env[k];
+    }
   });
 
   test("detectTier api-direct → getBillingTier returns anthropic-team-standard", () => {

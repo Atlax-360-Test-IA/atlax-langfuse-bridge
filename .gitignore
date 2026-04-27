@@ -13,3 +13,11 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+# Test artifacts
+*.tmp.jsonl
+tests/fixtures/*.tmp.jsonl
+
+# Build outputs
+dist/
+*.js.map

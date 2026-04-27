@@ -15,11 +15,23 @@ import {
   type TierFile,
 } from "./detect-tier";
 
+const ADV_ENV_KEYS = [
+  "CLAUDE_CODE_USE_VERTEX",
+  "ANTHROPIC_VERTEX_PROJECT_ID",
+  "ANTHROPIC_API_KEY",
+] as const;
+
 describe("detectTier — tier resolution order", () => {
-  const origEnv = { ...process.env };
+  const advSaved: Partial<Record<(typeof ADV_ENV_KEYS)[number], string>> = {};
+  for (const k of ADV_ENV_KEYS) {
+    if (process.env[k] !== undefined) advSaved[k] = process.env[k];
+  }
 
   afterEach(() => {
-    process.env = { ...origEnv };
+    for (const k of ADV_ENV_KEYS) {
+      if (advSaved[k] !== undefined) process.env[k] = advSaved[k];
+      else delete process.env[k];
+    }
   });
 
   test("vertex-gcp when CLAUDE_CODE_USE_VERTEX=1", () => {
