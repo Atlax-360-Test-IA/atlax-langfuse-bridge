@@ -96,6 +96,56 @@ reinicie antes de que `Stop` se dispare.
 
 Ver `docs/systemd/README.md` para instalación del cron.
 
+## Topología edge / core (invariante I-13)
+
+El stack tiene dos zonas de despliegue con propiedades distintas:
+
+| Zona                       | Componentes                                                                                                                          | Despliegue                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| **Edge** (máquina del dev) | `hooks/langfuse-sync.ts`, `scripts/reconcile-traces.ts`, `scripts/detect-tier.ts`, `shared/jsonl-discovery.ts`, `browser-extension/` | Permanece local — necesita acceso a `~/.claude/projects/**/*.jsonl` |
+| **Core** (nube en PRO)     | `langfuse-web`, `langfuse-worker`, postgres → Cloud SQL, redis → Memorystore, clickhouse → ClickHouse Cloud, minio → GCS             | Cloud Run (ver `infra/cloud-run.yaml`)                              |
+
+En PRO solo cambia `LANGFUSE_HOST`: de `http://localhost:3000` a la URL de Cloud Run. El hook y el reconciler no se modifican. Ver `infra/backup-story.md` para la estrategia de backup PRO (Cloud SQL PITR, RPO ≤ 1 min).
+
+## Observabilidad operacional — degradation log
+
+Todos los bloques `catch` del hook y del reconciler emiten una entrada estructurada a stderr en lugar de silenciar el error:
+
+```json
+{
+  "type": "degradation",
+  "source": "sendToLangfuse",
+  "error": "fetch failed",
+  "ts": "2026-04-27T10:00:00.000Z"
+}
+```
+
+Para ver los errores de las últimas sesiones:
+
+```bash
+journalctl --user -u atlax-langfuse-reconcile.service -n 50 | grep '"type":"degradation"'
+```
+
+## Tier cache SHA256
+
+`shared/hash-cache.ts` implementa un cache en memoria (`Map<hash, tier>`) con TTL de 24h y cleanup automático vía `setInterval(...).unref()`. El hash es SHA256 del contenido relevante del trace (`modelo + tokens + session_id`). Evita reclasificar traces idénticos en sesiones largas con muchos turnos repetitivos.
+
+## Test pyramid (estado post-Sprint 15)
+
+**466 tests / 814 assertions / 0 fallos** distribuidos en 35 ficheros de test.
+
+| Capa             | Ficheros clave                                                       | Cobertura                                        |
+| ---------------- | -------------------------------------------------------------------- | ------------------------------------------------ |
+| Unitarios        | `tests/*.test.ts`, `browser-extension/src/*.test.js`                 | Todos los módulos shared + extension             |
+| Cross-validation | `tests/cross-validation.test.ts`                                     | Invariantes entre módulos (pricing, drift, tier) |
+| E2E CI-runnable  | `tests/langfuse-sync-http.test.ts`, `tests/reconcile-replay.test.ts` | Hook HTTP + reconciler DRY_RUN                   |
+| ADR ejecutable   | `tests/cloud-run-boundary.test.ts`                                   | Verifica invariante I-13 en CI                   |
+
+```bash
+bun test          # todos los tests
+bun test --watch  # modo desarrollo
+```
+
 ## Tier determinista (`~/.atlax-ai/tier.json`)
 
 El statusline escribe el tier de facturación actual. El hook lo lee y lo
