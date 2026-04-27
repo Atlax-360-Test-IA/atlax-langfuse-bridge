@@ -51,15 +51,15 @@ describe("buildConfig — missing credentials", () => {
   });
 
   test("throws when LANGFUSE_PUBLIC_KEY is missing", async () => {
-    delete process.env.LANGFUSE_PUBLIC_KEY;
-    delete process.env.LANGFUSE_SECRET_KEY;
+    delete process.env["LANGFUSE_PUBLIC_KEY"];
+    delete process.env["LANGFUSE_SECRET_KEY"];
     const { getTrace } = await import("./langfuse-client");
     await expect(getTrace("any-id")).rejects.toThrow("LANGFUSE_PUBLIC_KEY");
   });
 
   test("throws when only SECRET_KEY is set", async () => {
-    delete process.env.LANGFUSE_PUBLIC_KEY;
-    process.env.LANGFUSE_SECRET_KEY = "sk-secret";
+    delete process.env["LANGFUSE_PUBLIC_KEY"];
+    process.env["LANGFUSE_SECRET_KEY"] = "sk-secret";
     const { getTrace } = await import("./langfuse-client");
     await expect(getTrace("any-id")).rejects.toThrow("LANGFUSE_PUBLIC_KEY");
   });
@@ -72,9 +72,9 @@ describe("getTrace", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    process.env.LANGFUSE_PUBLIC_KEY = "pk-test";
-    process.env.LANGFUSE_SECRET_KEY = "sk-test";
-    process.env.LANGFUSE_HOST = "http://localhost:3000";
+    process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
+    process.env["LANGFUSE_SECRET_KEY"] = "sk-test";
+    process.env["LANGFUSE_HOST"] = "http://localhost:3000";
     fetchSpy = spyOn(globalThis, "fetch");
   });
 
@@ -145,9 +145,9 @@ describe("listTraces", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    process.env.LANGFUSE_PUBLIC_KEY = "pk-test";
-    process.env.LANGFUSE_SECRET_KEY = "sk-test";
-    process.env.LANGFUSE_HOST = "http://localhost:3000";
+    process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
+    process.env["LANGFUSE_SECRET_KEY"] = "sk-test";
+    process.env["LANGFUSE_HOST"] = "http://localhost:3000";
     fetchSpy = spyOn(globalThis, "fetch");
   });
 
@@ -221,9 +221,9 @@ describe("createScore", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    process.env.LANGFUSE_PUBLIC_KEY = "pk-test";
-    process.env.LANGFUSE_SECRET_KEY = "sk-test";
-    process.env.LANGFUSE_HOST = "http://localhost:3000";
+    process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
+    process.env["LANGFUSE_SECRET_KEY"] = "sk-test";
+    process.env["LANGFUSE_HOST"] = "http://localhost:3000";
     fetchSpy = spyOn(globalThis, "fetch");
   });
 

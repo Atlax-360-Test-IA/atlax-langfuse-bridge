@@ -56,7 +56,7 @@ const stubTool: AgentTool<{ name: string; count?: number }, { ok: boolean }> = {
   },
   validate(raw) {
     const r = raw as Record<string, unknown>;
-    if (typeof r.name !== "string")
+    if (typeof r["name"] !== "string")
       return { ok: false, error: "name must be string" };
     return { ok: true, data: r as { name: string; count?: number } };
   },
@@ -194,7 +194,7 @@ describe("buildAiSdkToolset", () => {
     };
     const set = await buildAiSdkToolset([t1, t2], ctx);
     expect(Object.keys(set).sort()).toEqual(["t1", "t2"]);
-    expect(typeof set.t1!.execute).toBe("function");
+    expect(typeof set["t1"]!.execute).toBe("function");
   });
 });
 

@@ -153,12 +153,12 @@ function writeKeyFile(host: string, keys: KeyRecord[]): void {
 async function main(): Promise<void> {
   loadEnvFile();
 
-  const host = (process.env.LITELLM_HOST ?? "http://localhost:4001").replace(
+  const host = (process.env["LITELLM_HOST"] ?? "http://localhost:4001").replace(
     /\/$/,
     "",
   );
-  const masterKey = process.env.LITELLM_MASTER_KEY;
-  const dryRun = process.env.DRY_RUN === "1";
+  const masterKey = process.env["LITELLM_MASTER_KEY"];
+  const dryRun = process.env["DRY_RUN"] === "1";
 
   if (!masterKey) {
     process.stderr.write("[provision-keys] LITELLM_MASTER_KEY not set\n");

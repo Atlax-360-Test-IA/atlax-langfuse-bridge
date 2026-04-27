@@ -98,40 +98,40 @@ describe("E2E pipeline: JSONL → Langfuse batch", () => {
   const batch = buildBatch(SESSION_ID, FIXTURE_LINES);
 
   test("trace has correct type and traceId", () => {
-    expect(batch.trace.type).toBe("trace-create");
-    const body = batch.trace.body as Record<string, unknown>;
-    expect(body.id).toBe("cc-test-abc-123");
-    expect(body.name).toBe("claude-code-session");
+    expect(batch.trace["type"]).toBe("trace-create");
+    const body = batch.trace["body"] as Record<string, unknown>;
+    expect(body["id"]).toBe("cc-test-abc-123");
+    expect(body["name"]).toBe("claude-code-session");
   });
 
   test("trace timestamp uses session start, not current time", () => {
-    const body = batch.trace.body as Record<string, unknown>;
-    expect(batch.trace.timestamp).toBe("2026-04-15T10:00:00.000Z");
-    expect(body.timestamp).toBe("2026-04-15T10:00:00.000Z");
+    const body = batch.trace["body"] as Record<string, unknown>;
+    expect(batch.trace["timestamp"]).toBe("2026-04-15T10:00:00.000Z");
+    expect(body["timestamp"]).toBe("2026-04-15T10:00:00.000Z");
   });
 
   test("trace body.timestamp matches envelope timestamp (I-2 idempotency)", () => {
-    const body = batch.trace.body as Record<string, unknown>;
-    expect(body.timestamp).toBe(batch.trace.timestamp);
+    const body = batch.trace["body"] as Record<string, unknown>;
+    expect(body["timestamp"]).toBe(batch.trace["timestamp"]);
   });
 
   test("trace metadata contains correct turn count", () => {
-    const body = batch.trace.body as Record<string, unknown>;
-    const meta = body.metadata as Record<string, unknown>;
-    expect(meta.turns).toBe(3);
+    const body = batch.trace["body"] as Record<string, unknown>;
+    const meta = body["metadata"] as Record<string, unknown>;
+    expect(meta["turns"]).toBe(3);
   });
 
   test("trace metadata has correct session timestamps", () => {
-    const body = batch.trace.body as Record<string, unknown>;
-    const meta = body.metadata as Record<string, unknown>;
-    expect(meta.sessionStart).toBe("2026-04-15T10:00:00.000Z");
-    expect(meta.sessionEnd).toBe("2026-04-15T10:06:00.000Z");
+    const body = batch.trace["body"] as Record<string, unknown>;
+    const meta = body["metadata"] as Record<string, unknown>;
+    expect(meta["sessionStart"]).toBe("2026-04-15T10:00:00.000Z");
+    expect(meta["sessionEnd"]).toBe("2026-04-15T10:06:00.000Z");
   });
 
   test("trace metadata lists all models used", () => {
-    const body = batch.trace.body as Record<string, unknown>;
-    const meta = body.metadata as Record<string, unknown>;
-    const models = meta.modelsUsed as string[];
+    const body = batch.trace["body"] as Record<string, unknown>;
+    const meta = body["metadata"] as Record<string, unknown>;
+    const models = meta["modelsUsed"] as string[];
     expect(models).toContain("claude-sonnet-4-6");
     expect(models).toContain("claude-opus-4-7");
     expect(models.length).toBe(2);
@@ -140,7 +140,7 @@ describe("E2E pipeline: JSONL → Langfuse batch", () => {
   test("one generation per model", () => {
     expect(batch.generations.length).toBe(2);
     const names = batch.generations.map(
-      (g) => (g.body as Record<string, unknown>).model,
+      (g) => (g["body"] as Record<string, unknown>)["model"],
     );
     expect(names).toContain("claude-sonnet-4-6");
     expect(names).toContain("claude-opus-4-7");
@@ -148,14 +148,14 @@ describe("E2E pipeline: JSONL → Langfuse batch", () => {
 
   test("generations reference the parent trace", () => {
     for (const gen of batch.generations) {
-      const body = gen.body as Record<string, unknown>;
-      expect(body.traceId).toBe("cc-test-abc-123");
+      const body = gen["body"] as Record<string, unknown>;
+      expect(body["traceId"]).toBe("cc-test-abc-123");
     }
   });
 
   test("generation IDs are deterministic and unique", () => {
     const ids = batch.generations.map(
-      (g) => (g.body as Record<string, unknown>).id,
+      (g) => (g["body"] as Record<string, unknown>)["id"],
     );
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toContain("cc-test-abc-123-claude-sonnet-4-6");
@@ -164,47 +164,47 @@ describe("E2E pipeline: JSONL → Langfuse batch", () => {
 
   test("generation usage tokens are positive integers", () => {
     for (const gen of batch.generations) {
-      const body = gen.body as Record<string, unknown>;
-      const usage = body.usage as Record<string, unknown>;
-      expect(usage.input).toBeGreaterThan(0);
-      expect(usage.output).toBeGreaterThan(0);
-      expect(usage.total).toBeGreaterThan(0);
-      expect(usage.unit).toBe("TOKENS");
+      const body = gen["body"] as Record<string, unknown>;
+      const usage = body["usage"] as Record<string, unknown>;
+      expect(usage["input"]).toBeGreaterThan(0);
+      expect(usage["output"]).toBeGreaterThan(0);
+      expect(usage["total"]).toBeGreaterThan(0);
+      expect(usage["unit"]).toBe("TOKENS");
     }
   });
 
   test("total tokens = input + output + cache tokens", () => {
     for (const gen of batch.generations) {
-      const body = gen.body as Record<string, unknown>;
-      const usage = body.usage as Record<string, unknown>;
-      const meta = body.metadata as Record<string, unknown>;
+      const body = gen["body"] as Record<string, unknown>;
+      const usage = body["usage"] as Record<string, unknown>;
+      const meta = body["metadata"] as Record<string, unknown>;
       const expectedTotal =
-        (usage.input as number) +
-        (usage.output as number) +
-        (meta.cacheCreationTokens as number) +
-        (meta.cacheReadTokens as number);
-      expect(usage.total).toBe(expectedTotal);
+        (usage["input"] as number) +
+        (usage["output"] as number) +
+        (meta["cacheCreationTokens"] as number) +
+        (meta["cacheReadTokens"] as number);
+      expect(usage["total"]).toBe(expectedTotal);
     }
   });
 
   test("estimated cost is positive and reasonable", () => {
-    const body = batch.trace.body as Record<string, unknown>;
-    const meta = body.metadata as Record<string, unknown>;
-    const cost = meta.estimatedCostUSD as number;
+    const body = batch.trace["body"] as Record<string, unknown>;
+    const meta = body["metadata"] as Record<string, unknown>;
+    const cost = meta["estimatedCostUSD"] as number;
     expect(cost).toBeGreaterThan(0);
     expect(cost).toBeLessThan(10); // sanity check for fixture data
   });
 
   test("generation costs sum to trace total cost", () => {
-    const body = batch.trace.body as Record<string, unknown>;
-    const meta = body.metadata as Record<string, unknown>;
-    const traceCost = meta.estimatedCostUSD as number;
+    const body = batch.trace["body"] as Record<string, unknown>;
+    const meta = body["metadata"] as Record<string, unknown>;
+    const traceCost = meta["estimatedCostUSD"] as number;
 
     let genTotal = 0;
     for (const gen of batch.generations) {
-      const genBody = gen.body as Record<string, unknown>;
-      const costDetails = genBody.costDetails as Record<string, unknown>;
-      genTotal += costDetails.estimatedUSD as number;
+      const genBody = gen["body"] as Record<string, unknown>;
+      const costDetails = genBody["costDetails"] as Record<string, unknown>;
+      genTotal += costDetails["estimatedUSD"] as number;
     }
 
     expect(genTotal).toBeCloseTo(traceCost, 5);
@@ -212,7 +212,7 @@ describe("E2E pipeline: JSONL → Langfuse batch", () => {
 
   test("generation timestamp uses session end, not start", () => {
     for (const gen of batch.generations) {
-      expect(gen.timestamp).toBe("2026-04-15T10:06:00.000Z");
+      expect(gen["timestamp"]).toBe("2026-04-15T10:06:00.000Z");
     }
   });
 });
@@ -237,8 +237,8 @@ describe("E2E edge cases", () => {
     ];
     const batch = buildBatch("single-turn", lines);
     expect(batch.generations.length).toBe(1);
-    const body = batch.generations[0]!.body as Record<string, unknown>;
-    expect(body.model).toBe("claude-haiku-4-5-20251001");
+    const body = batch.generations[0]!["body"] as Record<string, unknown>;
+    expect(body["model"]).toBe("claude-haiku-4-5-20251001");
   });
 
   test("multi-model session groups generations by model", () => {
@@ -252,12 +252,13 @@ describe("E2E edge cases", () => {
     expect(batch.generations.length).toBe(2);
 
     const sonnet = batch.generations.find(
-      (g) => (g.body as Record<string, unknown>).model === "claude-sonnet-4-6",
+      (g) =>
+        (g["body"] as Record<string, unknown>)["model"] === "claude-sonnet-4-6",
     );
-    const sonnetBody = sonnet!.body as Record<string, unknown>;
-    const sonnetUsage = sonnetBody.usage as Record<string, unknown>;
+    const sonnetBody = sonnet!["body"] as Record<string, unknown>;
+    const sonnetUsage = sonnetBody["usage"] as Record<string, unknown>;
     // Aggregated: 100+300 = 400 input, 50+150 = 200 output
-    expect(sonnetUsage.input).toBe(400);
-    expect(sonnetUsage.output).toBe(200);
+    expect(sonnetUsage["input"]).toBe(400);
+    expect(sonnetUsage["output"]).toBe(200);
   });
 });

@@ -14,14 +14,22 @@ const ENV_PATH = join(homedir(), ".atlax-ai", "reconcile.env");
 
 export function loadEnvFile(envPath: string = ENV_PATH): void {
   try {
-    const content = readFileSync(envPath, "utf-8");
-    for (const line of content.split("\n")) {
+    // Strip UTF-8 BOM if present — some editors write it silently.
+    const raw = readFileSync(envPath, "utf-8").replace(/^﻿/, "");
+    for (const line of raw.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
       const eqIdx = trimmed.indexOf("=");
       if (eqIdx === -1) continue;
-      const key = trimmed.slice(0, eqIdx);
-      const val = trimmed.slice(eqIdx + 1);
+      const key = trimmed.slice(0, eqIdx).trim();
+      let val = trimmed.slice(eqIdx + 1);
+      // Strip enclosing single or double quotes — common .env editor pattern.
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
       if (!process.env[key]) process.env[key] = val;
     }
   } catch {

@@ -22,14 +22,14 @@ async function main(): Promise<void> {
   loadEnvFile();
 
   const litellmHost = (
-    process.env.LITELLM_HOST ?? "http://localhost:4001"
+    process.env["LITELLM_HOST"] ?? "http://localhost:4001"
   ).replace(/\/$/, "");
   const langfuseHost = (
-    process.env.LANGFUSE_HOST ?? "http://localhost:3000"
+    process.env["LANGFUSE_HOST"] ?? "http://localhost:3000"
   ).replace(/\/$/, "");
-  const masterKey = process.env.LITELLM_MASTER_KEY;
-  const pk = process.env.LANGFUSE_PUBLIC_KEY;
-  const sk = process.env.LANGFUSE_SECRET_KEY;
+  const masterKey = process.env["LITELLM_MASTER_KEY"];
+  const pk = process.env["LANGFUSE_PUBLIC_KEY"];
+  const sk = process.env["LANGFUSE_SECRET_KEY"];
 
   if (!masterKey) {
     process.stderr.write("[smoke] LITELLM_MASTER_KEY not set — SKIP\n");

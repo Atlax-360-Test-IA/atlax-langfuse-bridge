@@ -68,4 +68,40 @@ describe("loadEnvFile", () => {
     loadEnvFile(TMP_ENV);
     expect(process.env["TEST_VAR_A"]).toBe("base64==");
   });
+
+  it("strips UTF-8 BOM from file start", () => {
+    // BOM = ﻿ (EF BB BF in UTF-8)
+    writeFileSync(TMP_ENV, "﻿TEST_VAR_A=bom-value\n");
+    delete process.env["TEST_VAR_A"];
+    loadEnvFile(TMP_ENV);
+    expect(process.env["TEST_VAR_A"]).toBe("bom-value");
+  });
+
+  it("strips enclosing double quotes from value", () => {
+    writeFileSync(TMP_ENV, 'TEST_VAR_A="http://localhost:3000"\n');
+    delete process.env["TEST_VAR_A"];
+    loadEnvFile(TMP_ENV);
+    expect(process.env["TEST_VAR_A"]).toBe("http://localhost:3000");
+  });
+
+  it("strips enclosing single quotes from value", () => {
+    writeFileSync(TMP_ENV, "TEST_VAR_A='my secret value'\n");
+    delete process.env["TEST_VAR_A"];
+    loadEnvFile(TMP_ENV);
+    expect(process.env["TEST_VAR_A"]).toBe("my secret value");
+  });
+
+  it("does not strip mismatched quotes", () => {
+    writeFileSync(TMP_ENV, "TEST_VAR_A=\"mismatched'\n");
+    delete process.env["TEST_VAR_A"];
+    loadEnvFile(TMP_ENV);
+    expect(process.env["TEST_VAR_A"]).toBe("\"mismatched'");
+  });
+
+  it("does not strip single quote at start only", () => {
+    writeFileSync(TMP_ENV, "TEST_VAR_A='no-end\n");
+    delete process.env["TEST_VAR_A"];
+    loadEnvFile(TMP_ENV);
+    expect(process.env["TEST_VAR_A"]).toBe("'no-end");
+  });
 });

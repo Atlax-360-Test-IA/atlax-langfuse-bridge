@@ -22,11 +22,11 @@ import {
 import { COST_EPSILON } from "../shared/constants";
 import { discoverRecentJsonls } from "../shared/jsonl-discovery";
 
-const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
+const HOST = (process.env["LANGFUSE_HOST"] ?? "http://localhost:3000").replace(
   /\/$/,
   "",
 );
-const WINDOW_HOURS = Number(process.env.WINDOW_HOURS ?? "24");
+const WINDOW_HOURS = Number(process.env["WINDOW_HOURS"] ?? "24");
 
 // ─── Langfuse fetch ──────────────────────────────────────────────────────────
 
@@ -53,10 +53,10 @@ export function classifyDrift(
 ): DriftStatus {
   if (!remote) return "MISSING";
   const meta = remote.metadata ?? null;
-  const rTurns = typeof meta?.turns === "number" ? meta.turns : null;
+  const rTurns = typeof meta?.["turns"] === "number" ? meta["turns"] : null;
   const rCost =
-    typeof meta?.estimatedCostUSD === "number" ? meta.estimatedCostUSD : null;
-  const rEnd = typeof meta?.sessionEnd === "string" ? meta.sessionEnd : null;
+    typeof meta?.["estimatedCostUSD"] === "number" ? meta["estimatedCostUSD"] : null;
+  const rEnd = typeof meta?.["sessionEnd"] === "string" ? meta["sessionEnd"] : null;
   if (rTurns !== local.turns) return "TURNS_DRIFT";
   if (Math.abs((rCost ?? 0) - local.totalCost) > COST_EPSILON)
     return "COST_DRIFT";
@@ -80,8 +80,8 @@ interface Row {
 }
 
 async function main() {
-  const PK = process.env.LANGFUSE_PUBLIC_KEY;
-  const SK = process.env.LANGFUSE_SECRET_KEY;
+  const PK = process.env["LANGFUSE_PUBLIC_KEY"];
+  const SK = process.env["LANGFUSE_SECRET_KEY"];
   if (!PK || !SK) {
     console.error(
       "[validate-traces] LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY not set",
@@ -112,11 +112,11 @@ async function main() {
     const status = classifyDrift({ ...local, end: local.end ?? null }, remote);
     const meta = remote?.metadata ?? null;
     const rTurns: number | null =
-      typeof meta?.turns === "number" ? meta.turns : null;
+      typeof meta?.["turns"] === "number" ? meta["turns"] : null;
     const rCost: number | null =
-      typeof meta?.estimatedCostUSD === "number" ? meta.estimatedCostUSD : null;
+      typeof meta?.["estimatedCostUSD"] === "number" ? meta["estimatedCostUSD"] : null;
     const rEnd: string | null =
-      typeof meta?.sessionEnd === "string" ? meta.sessionEnd : null;
+      typeof meta?.["sessionEnd"] === "string" ? meta["sessionEnd"] : null;
 
     rows.push({
       session: sid.slice(0, 8),

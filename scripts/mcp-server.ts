@@ -26,8 +26,8 @@ import type { AgentType, ToolContext } from "../shared/tools/types";
 // ─── Config ─────────────────────────────────────────────────────────────────
 
 const AGENT_TYPE: AgentType =
-  (process.env.MCP_AGENT_TYPE as AgentType) || "coordinator";
-const STEP_BUDGET_MS = Number(process.env.MCP_STEP_BUDGET_MS ?? "10000");
+  (process.env["MCP_AGENT_TYPE"] as AgentType) || "coordinator";
+const STEP_BUDGET_MS = Number(process.env["MCP_STEP_BUDGET_MS"] ?? "10000");
 const SERVER_NAME = "atlax-langfuse-bridge";
 const SERVER_VERSION = "0.1.0";
 const PROTOCOL_VERSION = "2024-11-05"; // MCP spec version

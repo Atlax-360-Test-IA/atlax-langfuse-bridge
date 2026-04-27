@@ -32,9 +32,9 @@ describe("initialize", () => {
     const res = lastResponse();
     expect(res.id).toBe(1);
     const r = res.result as Record<string, unknown>;
-    expect(r.protocolVersion).toBe("2024-11-05");
-    expect(r.capabilities).toBeDefined();
-    expect((r.serverInfo as any).name).toBe("atlax-langfuse-bridge");
+    expect(r["protocolVersion"]).toBe("2024-11-05");
+    expect(r["capabilities"]).toBeDefined();
+    expect((r["serverInfo"] as any).name).toBe("atlax-langfuse-bridge");
   });
 });
 
@@ -150,7 +150,7 @@ describe("ping", () => {
 describe("sandbox echo via env", () => {
   const origEnv = { ...process.env };
   beforeEach(() => {
-    process.env.LANGFUSE_BRIDGE_SANDBOX_MODE = "echo";
+    process.env["LANGFUSE_BRIDGE_SANDBOX_MODE"] = "echo";
   });
   // afterEach restores via outer beforeEach reset of writes; restore env explicitly
   test("tools/call returns echo response without hitting Langfuse", async () => {

@@ -127,9 +127,9 @@ describe("annotateObservation.execute", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    process.env.LANGFUSE_PUBLIC_KEY = "pk-test";
-    process.env.LANGFUSE_SECRET_KEY = "sk-test";
-    process.env.LANGFUSE_HOST = "http://localhost:3000";
+    process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
+    process.env["LANGFUSE_SECRET_KEY"] = "sk-test";
+    process.env["LANGFUSE_HOST"] = "http://localhost:3000";
     fetchSpy = spyOn(globalThis, "fetch");
   });
 

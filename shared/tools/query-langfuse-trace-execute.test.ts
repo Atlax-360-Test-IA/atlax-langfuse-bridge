@@ -42,9 +42,9 @@ describe("queryLangfuseTrace.execute — traceId lookup", () => {
 
   beforeEach(() => {
     clearCache();
-    process.env.LANGFUSE_PUBLIC_KEY = "pk-test";
-    process.env.LANGFUSE_SECRET_KEY = "sk-test";
-    process.env.LANGFUSE_HOST = "http://localhost:3000";
+    process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
+    process.env["LANGFUSE_SECRET_KEY"] = "sk-test";
+    process.env["LANGFUSE_HOST"] = "http://localhost:3000";
     fetchSpy = spyOn(globalThis, "fetch");
   });
 
@@ -110,9 +110,9 @@ describe("queryLangfuseTrace.execute — cache hit/miss", () => {
 
   beforeEach(() => {
     clearCache();
-    process.env.LANGFUSE_PUBLIC_KEY = "pk-test";
-    process.env.LANGFUSE_SECRET_KEY = "sk-test";
-    process.env.LANGFUSE_HOST = "http://localhost:3000";
+    process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
+    process.env["LANGFUSE_SECRET_KEY"] = "sk-test";
+    process.env["LANGFUSE_HOST"] = "http://localhost:3000";
     fetchSpy = spyOn(globalThis, "fetch");
   });
 
@@ -156,9 +156,9 @@ describe("queryLangfuseTrace.execute — list (no traceId)", () => {
 
   beforeEach(() => {
     clearCache();
-    process.env.LANGFUSE_PUBLIC_KEY = "pk-test";
-    process.env.LANGFUSE_SECRET_KEY = "sk-test";
-    process.env.LANGFUSE_HOST = "http://localhost:3000";
+    process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
+    process.env["LANGFUSE_SECRET_KEY"] = "sk-test";
+    process.env["LANGFUSE_HOST"] = "http://localhost:3000";
     fetchSpy = spyOn(globalThis, "fetch");
   });
 

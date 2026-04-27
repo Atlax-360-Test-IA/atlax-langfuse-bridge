@@ -46,18 +46,18 @@ export function detectTier(): TierFile {
   const now = new Date().toISOString();
 
   // 1. Vertex
-  const vertex = process.env.CLAUDE_CODE_USE_VERTEX;
+  const vertex = process.env["CLAUDE_CODE_USE_VERTEX"];
   if (vertex === "1" || vertex === "true") {
     return {
       tier: "vertex-gcp",
       source: "env-vertex",
-      account: process.env.ANTHROPIC_VERTEX_PROJECT_ID ?? null,
+      account: process.env["ANTHROPIC_VERTEX_PROJECT_ID"] ?? null,
       detectedAt: now,
     };
   }
 
   // 2. API direct
-  if (process.env.ANTHROPIC_API_KEY) {
+  if (process.env["ANTHROPIC_API_KEY"]) {
     return {
       tier: "api-direct",
       source: "env-api-key",
