@@ -174,7 +174,7 @@ services:
     volumes:
       - minio-data:/data
     ports:
-      - "9001:9001" # MinIO console (opcional, acceso interno)
+      - "127.0.0.1:9001:9001" # MinIO console — solo acceso local (no expuesto a LAN)
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s

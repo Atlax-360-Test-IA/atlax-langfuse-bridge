@@ -5,7 +5,11 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { classifyDrift, type DriftStatus } from "./reconcile-traces";
+import {
+  classifyDrift,
+  SAFE_SID_RE,
+  type DriftStatus,
+} from "./reconcile-traces";
 
 // ─── classifyDrift ────────────────────────────────────────────────────────────
 
@@ -94,5 +98,42 @@ describe("classifyDrift", () => {
   test("MISSING returns immediately regardless of metadata presence", () => {
     const result: DriftStatus = classifyDrift(local(0, 0), null);
     expect(result).toBe("MISSING");
+  });
+});
+
+// ─── SAFE_SID_RE (C4: path traversal prevention) ─────────────────────────────
+
+describe("SAFE_SID_RE", () => {
+  test("accepts standard UUID format", () => {
+    expect(SAFE_SID_RE.test("550e8400-e29b-41d4-a716-446655440000")).toBe(true);
+  });
+
+  test("accepts alphanumeric with underscores and hyphens", () => {
+    expect(SAFE_SID_RE.test("abc123_def-456")).toBe(true);
+  });
+
+  test("rejects path traversal sequences", () => {
+    expect(SAFE_SID_RE.test("../secret")).toBe(false);
+    expect(SAFE_SID_RE.test("../../etc/passwd")).toBe(false);
+  });
+
+  test("rejects slashes", () => {
+    expect(SAFE_SID_RE.test("foo/bar")).toBe(false);
+  });
+
+  test("rejects dots", () => {
+    expect(SAFE_SID_RE.test("foo.bar")).toBe(false);
+  });
+
+  test("rejects null bytes", () => {
+    expect(SAFE_SID_RE.test("foo\x00bar")).toBe(false);
+  });
+
+  test("rejects spaces", () => {
+    expect(SAFE_SID_RE.test("foo bar")).toBe(false);
+  });
+
+  test("rejects empty string", () => {
+    expect(SAFE_SID_RE.test("")).toBe(false);
   });
 });

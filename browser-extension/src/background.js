@@ -14,6 +14,7 @@
 
 import { estimateCost } from "./pricing.js";
 import { emitDegradation } from "./degradation.js";
+import { isSafeHost } from "./validators.js";
 
 // ── In-memory user cache ───────────────────────────────────────────────────
 let cachedEmail = "unknown";
@@ -50,6 +51,13 @@ async function handleTurn(turn) {
     return;
   }
   if (!cfg.publicKey || !cfg.secretKey || !cfg.langfuseHost) return;
+  if (!isSafeHost(cfg.langfuseHost)) {
+    await emitDegradation(
+      "handleTurn:unsafe-host",
+      new Error(`Blocked unsafe langfuseHost: ${cfg.langfuseHost}`),
+    );
+    return;
+  }
 
   const userId = turn.userEmail || cachedEmail;
   const convId = turn.conversationId || crypto.randomUUID();
@@ -150,6 +158,12 @@ async function testConnection() {
   }
   if (!cfg.publicKey || !cfg.secretKey || !cfg.langfuseHost) {
     return { ok: false, error: "Credenciales no configuradas" };
+  }
+  if (!isSafeHost(cfg.langfuseHost)) {
+    return {
+      ok: false,
+      error: "Host no permitido (debe ser HTTPS o localhost)",
+    };
   }
   try {
     const host = cfg.langfuseHost.replace(/\/$/, "");
