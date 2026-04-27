@@ -83,11 +83,11 @@ describe("pricing fallback consistency", () => {
   });
 });
 
-// ─── Tier detection consistency ─────────────────────────────────────────────
+// ─── Tier detection consistency — I-12: env restore per-key ─────────────────
 
 const XVAL_ENV_KEYS = ["CLAUDE_CODE_USE_VERTEX", "ANTHROPIC_API_KEY"] as const;
 
-describe("tier detection consistency", () => {
+describe("tier detection consistency (I-12)", () => {
   const xvalSaved: Partial<Record<(typeof XVAL_ENV_KEYS)[number], string>> = {};
   for (const k of XVAL_ENV_KEYS) {
     if (process.env[k] !== undefined) xvalSaved[k] = process.env[k];

@@ -81,10 +81,7 @@ async function main() {
 
   const rows: Row[] = [];
   for (const p of paths) {
-    const sid = p
-      .split("/")
-      .pop()!
-      .replace(/\.jsonl$/, "");
+    const sid = (p.split("/").pop() ?? "").replace(/\.jsonl$/, "");
     const tid = `cc-${sid}`;
     const local = aggregate(p);
     const remote = await getTrace(tid);

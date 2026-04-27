@@ -225,9 +225,9 @@ describe("E2E pipeline: JSONL → Langfuse batch", () => {
   });
 });
 
-// ─── Edge cases ─────────────────────────────────────────────────────────────
+// ─── Edge cases — I-3: cwd extracted from first JSONL entry, not Stop event ───
 
-describe("E2E edge cases", () => {
+describe("E2E edge cases (I-3: cwd from first entry)", () => {
   test("session with no assistant turns produces empty batch", () => {
     const lines = [
       '{"type":"summary","timestamp":"2026-04-15T10:00:00.000Z","cwd":"/tmp"}',

@@ -130,9 +130,9 @@ async function runReconciler(extraEnv: Record<string, string> = {}): Promise<{
   return { exitCode: proc.exitCode ?? -1, stdout, stderr };
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+// ─── Tests — I-5: WINDOW_HOURS default 24h, NaN → 24h, cap 8760h ─────────────
 
-describe("reconcile-traces — dry run scan", () => {
+describe("reconcile-traces — dry run scan (I-5)", () => {
   test("DRY_RUN=1 exits 0 and detects MISSING sessions", async () => {
     const { exitCode, stdout } = await runReconciler({ DRY_RUN: "1" });
     expect(exitCode).toBe(0);
