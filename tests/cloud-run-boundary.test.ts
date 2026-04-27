@@ -78,17 +78,21 @@ describe("isSafeHost accepts Cloud Run URLs (PRO migration path)", () => {
   });
 });
 
-// ─── 3. CLAUDE.md invariant I-13 is present ──────────────────────────────────
+// ─── 3. CLAUDE.md + ARCHITECTURE.md document I-13 ────────────────────────────
 
 describe("CLAUDE.md invariants", () => {
   const claudeMd = readFileSync(join(REPO_ROOT, "CLAUDE.md"), "utf-8");
+  const architectureMd = readFileSync(
+    join(REPO_ROOT, "ARCHITECTURE.md"),
+    "utf-8",
+  );
 
-  test("invariant I-13 is documented", () => {
+  test("invariant I-13 is documented in CLAUDE.md", () => {
     expect(claudeMd).toContain("I-13");
     expect(claudeMd).toContain("NUNCA migran a Cloud Run");
   });
 
-  test("invariant I-13 lists the edge components", () => {
+  test("invariant I-13 lists the edge components in CLAUDE.md", () => {
     // The list of files that stay local — guard against partial deletions.
     expect(claudeMd).toContain("scripts/reconcile-traces.ts");
     expect(claudeMd).toContain("hooks/langfuse-sync.ts");
@@ -96,8 +100,12 @@ describe("CLAUDE.md invariants", () => {
     expect(claudeMd).toContain("~/.claude/projects");
   });
 
-  test("Stack section documents edge/core split", () => {
-    expect(claudeMd).toContain("Edge vs Core");
+  test("ARCHITECTURE.md §4 documents edge/core split", () => {
+    // After SDD migration, the edge/core topology lives in ARCHITECTURE.md §4
+    // (was in CLAUDE.md "Stack" section pre-Fase B).
+    expect(architectureMd).toContain("edge");
+    expect(architectureMd).toContain("core");
+    expect(architectureMd).toContain("máquina del dev");
   });
 });
 

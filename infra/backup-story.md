@@ -2,6 +2,12 @@
 
 **Status: PLANNED — not yet implemented.** Reference for migration post-PoC.
 
+> 📖 Referencias cruzadas:
+>
+> - [`ARCHITECTURE.md §9`](../ARCHITECTURE.md#§9--seguridad) — secrets management en Cloud Run
+> - [`ADR-002`](../docs/adr/ADR-002-edge-core-split.md) — qué migra a Cloud Run y qué se queda local (I-13)
+> - [`infra/cloud-run.yaml`](./cloud-run.yaml) — manifest de referencia
+
 ## Goal
 
 Achieve RPO ≤ 1 minute and RTO ≤ 15 minutes for the Langfuse v3 stack in
