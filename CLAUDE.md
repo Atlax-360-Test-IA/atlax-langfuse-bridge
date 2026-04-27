@@ -103,6 +103,32 @@ afterEach(() => {
 });
 ```
 
+### I-13 · El reconciler y el hook NUNCA migran a Cloud Run
+
+El reconciler (`scripts/reconcile-traces.ts`), el hook (`hooks/langfuse-sync.ts`)
+y los scripts de descubrimiento (`shared/jsonl-discovery.ts`, `shared/env-loader.ts`)
+**dependen del filesystem local del developer** y por diseño se quedan en la
+máquina del dev — nunca van a Cloud Run.
+
+Razones:
+
+1. Los JSONLs viven en `~/.claude/projects/**/sessions/*.jsonl` — son escritos
+   por Claude Code en cada turno. Migrarlos centralizadamente requiere un
+   endpoint custom de upload (vector SSRF) o cambiar el modelo de eventos.
+2. `~/.atlax-ai/tier.json` se escribe desde la statusline de Claude Code en
+   la máquina del dev (autenticación local).
+3. `~/.atlax-ai/reconcile.env` es config por-dev (cada uno con su WINDOW_HOURS).
+4. El cron systemd/launchd vive en la máquina del dev.
+
+Lo que SÍ migra a Cloud Run en PRO: solo el stack Langfuse v3
+(`langfuse-web`, `langfuse-worker`, postgres → Cloud SQL, redis → Memorystore,
+clickhouse → ClickHouse Cloud o self-hosted, minio → GCS). El destino del
+hook (`LANGFUSE_HOST`) cambia de `http://localhost:3000` a `https://<cloud-run-url>`.
+
+**Cómo aplicar**: si una función toca `os.homedir()`, `~/.atlax-ai`,
+`~/.claude/projects` o `execSync("git ...")`, está en el lado "edge" del
+sistema y se queda local. Esto se valida en `tests/cloud-run-boundary.test.ts`.
+
 ## Comandos de operación
 
 ```bash
@@ -125,7 +151,24 @@ bun run scripts/detect-tier.ts
 - Runtime: **Bun** (hook + scripts, cero deps runtime)
 - Stack observabilidad: Langfuse v3 (postgres + clickhouse + redis + minio)
 - Deployment actual: docker-compose local (PoC)
-- Deployment futuro: Cloud Run + Cloud SQL + Memorystore + GCS (post-PoC)
+- Deployment futuro: ver división **edge/core** abajo (post-PoC)
+
+### Edge vs Core (post-PoC topology)
+
+| Componente                              | Lado | Hosting                  |
+| --------------------------------------- | ---- | ------------------------ |
+| `hooks/langfuse-sync.ts`                | edge | Máquina del dev          |
+| `scripts/reconcile-traces.ts` + systemd | edge | Máquina del dev          |
+| `scripts/detect-tier.ts`                | edge | Máquina del dev          |
+| `browser-extension/`                    | edge | Chrome del dev           |
+| `langfuse-web` + `langfuse-worker`      | core | Cloud Run                |
+| postgres                                | core | Cloud SQL (PITR enabled) |
+| redis                                   | core | Memorystore              |
+| clickhouse                              | core | ClickHouse Cloud o self  |
+| minio                                   | core | GCS bucket               |
+| `litellm-proxy` (opt-in gateway)        | core | Cloud Run                |
+
+Ver `infra/cloud-run.yaml` para el manifest de referencia (no aplicado en CI).
 
 ## Anti-patterns a evitar
 

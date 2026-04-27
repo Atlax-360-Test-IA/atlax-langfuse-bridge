@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
 # backup-langfuse.sh — Daily backup of Langfuse Postgres + ClickHouse
 #
+# === SCOPE ===================================================================
+# This script is designed for the LOCAL docker-compose stack (PoC). Uses
+# `docker exec` against named containers — incompatible with Cloud Run.
+#
+# In PRO (post-PoC), backups are managed by the cloud provider:
+#   - Postgres → Cloud SQL with PITR enabled (Point-In-Time Recovery)
+#               https://cloud.google.com/sql/docs/postgres/backup-recovery/pitr
+#   - ClickHouse → ClickHouse Cloud automatic backups (daily + restore-to-time)
+#               or BACKUP TO S3 if self-hosted on GKE
+#   - MinIO → migrate to GCS bucket with Object Versioning + lifecycle policy
+#
+# DO NOT run this script inside Cloud Run / Kubernetes — it will fail because
+# `docker compose ps` doesn't apply. The guard below detects K_SERVICE
+# (Cloud Run injects this env var) and exits early.
+# =============================================================================
+#
 # Stores compressed dumps in ~/.atlax-ai/backups/
 # Retention: last 7 daily + last 4 weekly (Sundays)
 #
@@ -10,10 +26,19 @@
 #
 # Exit codes:
 #   0 — backup completed successfully
-#   1 — configuration error
+#   1 — configuration error (or running in Cloud Run)
 #   2 — backup failed
 
 set -euo pipefail
+
+# ── Guard: refuse to run in Cloud Run / Kubernetes ───────────────────────────
+# K_SERVICE is auto-injected by Cloud Run; KUBERNETES_SERVICE_HOST by k8s.
+if [ -n "${K_SERVICE:-}" ] || [ -n "${KUBERNETES_SERVICE_HOST:-}" ]; then
+  printf '{"ts":"%s","level":"error","service":"backup-langfuse","msg":"%s"}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "Refusing to run in Cloud Run/k8s. In PRO, use Cloud SQL PITR + ClickHouse Cloud backups." >&2
+  exit 1
+fi
 
 BACKUP_DIR="${BACKUP_DIR:-$HOME/.atlax-ai/backups}"
 COMPOSE_DIR="${COMPOSE_DIR:-$(cd "$(dirname "$0")/../docker" && pwd)}"
