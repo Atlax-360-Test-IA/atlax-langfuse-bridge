@@ -1,8 +1,23 @@
 {
   "name": "atlax-langfuse-bridge",
-  "version": "0.0.0",
+  "version": "0.5.4",
+  "description": "Torre de control FinOps para Claude Code en Atlax360 — hook Stop + reconciler cron + MCP server + Langfuse v3 self-hosted, cero deps prod.",
   "private": true,
   "type": "module",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Atlax-360-Test-IA/atlax-langfuse-bridge.git"
+  },
+  "keywords": [
+    "claude-code",
+    "langfuse",
+    "finops",
+    "observability",
+    "bun",
+    "mcp",
+    "atlax360"
+  ],
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
