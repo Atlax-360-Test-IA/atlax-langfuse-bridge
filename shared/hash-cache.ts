@@ -31,6 +31,11 @@ const cleanupInterval = setInterval(
 );
 cleanupInterval.unref();
 
+/** Cancela el timer de limpieza — necesario en tests para evitar handles abiertos. */
+export function stopCleanupInterval(): void {
+  clearInterval(cleanupInterval);
+}
+
 /**
  * Hash SHA256 canónico de un trace para clasificación de tier.
  * Conveniencia para el caso de uso original — los callers genéricos usan

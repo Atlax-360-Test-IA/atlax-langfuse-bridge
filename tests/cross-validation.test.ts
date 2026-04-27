@@ -8,14 +8,12 @@
 
 import { describe, expect, test, afterEach, spyOn, beforeEach } from "bun:test";
 import { aggregateLines } from "../shared/aggregate";
-import {
-  calcCost,
-  getBillingTier,
-  emitDegradation as hookEmit,
-} from "../hooks/langfuse-sync";
+import { calcCost, getBillingTier } from "../hooks/langfuse-sync";
 import { detectTier } from "../scripts/detect-tier";
 import { getPricing } from "../shared/model-pricing";
 import { emitDegradation as sharedEmit } from "../shared/degradation";
+// hookEmit was a re-export of sharedEmit — now imported directly from source
+const hookEmit = sharedEmit;
 
 const FIXTURE_LINES = [
   '{"type":"summary","timestamp":"2026-04-15T10:00:00.000Z","cwd":"/home/dev/work/my-project"}',
@@ -95,7 +93,7 @@ describe("tier detection consistency", () => {
   });
 
   test("getBillingTier vertex matches detectTier vertex", () => {
-    process.env.CLAUDE_CODE_USE_VERTEX = "1";
+    process.env["CLAUDE_CODE_USE_VERTEX"] = "1";
     const hookTier = getBillingTier();
     const scriptTier = detectTier();
     expect(hookTier).toBe("vertex-gcp");
@@ -103,8 +101,8 @@ describe("tier detection consistency", () => {
   });
 
   test("both modules agree vertex takes precedence", () => {
-    process.env.CLAUDE_CODE_USE_VERTEX = "1";
-    process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+    process.env["CLAUDE_CODE_USE_VERTEX"] = "1";
+    process.env["ANTHROPIC_API_KEY"] = "sk-ant-test";
 
     const hookTier = getBillingTier("standard");
     const scriptTier = detectTier();
@@ -170,8 +168,8 @@ describe("tier detection consistency — api-direct path", () => {
   });
 
   test("detectTier api-direct → getBillingTier returns anthropic-team-standard", () => {
-    delete process.env.CLAUDE_CODE_USE_VERTEX;
-    process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+    delete process.env["CLAUDE_CODE_USE_VERTEX"];
+    process.env["ANTHROPIC_API_KEY"] = "sk-ant-test";
     const scriptTier = detectTier();
     // getBillingTier has no 'api-direct' category — maps to team-standard
     const hookTier = getBillingTier("standard");

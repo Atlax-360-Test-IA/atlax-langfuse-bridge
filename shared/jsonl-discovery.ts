@@ -9,8 +9,7 @@
  * callers can emit degradation entries (reconcile-traces behaviour).
  */
 
-import { statSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { stat, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -39,16 +38,18 @@ export async function discoverRecentJsonls(
       onError?.("discoverJsonls:readdir-project", err);
       continue;
     }
-    for (const f of files) {
-      if (!f.endsWith(".jsonl")) continue;
-      const p = join(projectDir, f);
-      try {
-        const st = statSync(p);
-        if (st.mtimeMs >= cutoff) found.push(p);
-      } catch (err) {
-        onError?.("discoverJsonls:stat", err);
-      }
-    }
+    const statPromises = files
+      .filter((f) => f.endsWith(".jsonl"))
+      .map(async (f) => {
+        const p = join(projectDir, f);
+        try {
+          const st = await stat(p);
+          if (st.mtimeMs >= cutoff) found.push(p);
+        } catch (err) {
+          onError?.("discoverJsonls:stat", err);
+        }
+      });
+    await Promise.all(statPromises);
   }
   return found.sort();
 }

@@ -42,7 +42,7 @@ afterEach(() => {
 
 describe("getSandboxMode", () => {
   test("returns 'off' when env unset", () => {
-    delete process.env.LANGFUSE_BRIDGE_SANDBOX_MODE;
+    delete process.env["LANGFUSE_BRIDGE_SANDBOX_MODE"];
     expect(getSandboxMode()).toBe("off");
   });
 
@@ -168,7 +168,7 @@ describe("withSandbox — degradation mode", () => {
 
 describe("env-driven activation (no override)", () => {
   test("uses env when modeOverride omitted", async () => {
-    process.env.LANGFUSE_BRIDGE_SANDBOX_MODE = "echo";
+    process.env["LANGFUSE_BRIDGE_SANDBOX_MODE"] = "echo";
     const wrapped = withSandbox(tool); // no override
     const out = (await wrapped.execute(
       { x: 7 },
@@ -178,7 +178,7 @@ describe("env-driven activation (no override)", () => {
   });
 
   test("env=off behaves like passthrough", async () => {
-    delete process.env.LANGFUSE_BRIDGE_SANDBOX_MODE;
+    delete process.env["LANGFUSE_BRIDGE_SANDBOX_MODE"];
     const wrapped = withSandbox(tool);
     const out = await wrapped.execute({ x: 7 }, ctx);
     expect((out as any).real).toBe(true);

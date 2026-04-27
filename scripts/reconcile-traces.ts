@@ -32,13 +32,13 @@ import {
 import { COST_EPSILON } from "../shared/constants";
 import { discoverRecentJsonls } from "../shared/jsonl-discovery";
 
-const HOST = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
+const HOST = (process.env["LANGFUSE_HOST"] ?? "http://localhost:3000").replace(
   /\/$/,
   "",
 );
-const WINDOW_HOURS = Number(process.env.WINDOW_HOURS ?? "24");
-const DRY_RUN = process.env.DRY_RUN === "1";
-const EXCLUDE_SESSION = process.env.EXCLUDE_SESSION ?? ""; // skip current session
+const WINDOW_HOURS = Number(process.env["WINDOW_HOURS"] ?? "24");
+const DRY_RUN = process.env["DRY_RUN"] === "1";
+const EXCLUDE_SESSION = process.env["EXCLUDE_SESSION"] ?? ""; // skip current session
 const HOOK_PATH = resolve(
   dirname(new URL(import.meta.url).pathname),
   "..",
@@ -158,10 +158,13 @@ export function classifyDrift(
 ): DriftStatus {
   if (!remote) return "MISSING";
   const meta = remote.metadata ?? null;
-  const rTurns = typeof meta?.turns === "number" ? meta.turns : null;
+  const rTurns = typeof meta?.["turns"] === "number" ? meta["turns"] : null;
   const rCost =
-    typeof meta?.estimatedCostUSD === "number" ? meta.estimatedCostUSD : null;
-  const rEnd = typeof meta?.sessionEnd === "string" ? meta.sessionEnd : null;
+    typeof meta?.["estimatedCostUSD"] === "number"
+      ? meta["estimatedCostUSD"]
+      : null;
+  const rEnd =
+    typeof meta?.["sessionEnd"] === "string" ? meta["sessionEnd"] : null;
   if (rTurns !== local.turns) return "TURNS_DRIFT";
   if (Math.abs((rCost ?? 0) - local.totalCost) > COST_EPSILON)
     return "COST_DRIFT";
@@ -172,8 +175,8 @@ export function classifyDrift(
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const PK = process.env.LANGFUSE_PUBLIC_KEY;
-  const SK = process.env.LANGFUSE_SECRET_KEY;
+  const PK = process.env["LANGFUSE_PUBLIC_KEY"];
+  const SK = process.env["LANGFUSE_SECRET_KEY"];
   if (!PK || !SK) {
     log("error", "LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY not set");
     process.exit(1);
@@ -226,11 +229,12 @@ async function main() {
       sessionId: sid.slice(0, 8),
       status,
       localTurns: local.turns,
-      remoteTurns: typeof remMeta?.turns === "number" ? remMeta.turns : null,
+      remoteTurns:
+        typeof remMeta?.["turns"] === "number" ? remMeta["turns"] : null,
       localCost: Number(local.totalCost.toFixed(2)),
       remoteCost:
-        typeof remMeta?.estimatedCostUSD === "number"
-          ? remMeta.estimatedCostUSD
+        typeof remMeta?.["estimatedCostUSD"] === "number"
+          ? remMeta["estimatedCostUSD"]
           : null,
       path: p,
     });

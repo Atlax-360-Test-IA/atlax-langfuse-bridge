@@ -26,9 +26,16 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
  * Usa substring matching para cubrir versiones (ej. "claude-opus-4-6" → "claude-opus-4").
  * Fallback a "default" (Sonnet pricing) si no hay match.
  */
+// Sorted longest-key-first so "claude-haiku-4-5" matches before "claude-haiku-4"
+// if a shorter key were ever added. Prevents spurious substring matches.
+const PRICING_KEYS = Object.keys(MODEL_PRICING)
+  .filter((k) => k !== "default")
+  .sort((a, b) => b.length - a.length);
+
 export function getPricing(model: string): ModelPricing {
-  for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
-    if (key !== "default" && model.includes(key)) return pricing;
+  if (typeof model !== "string") return MODEL_PRICING["default"]!;
+  for (const key of PRICING_KEYS) {
+    if (model.includes(key)) return MODEL_PRICING[key]!;
   }
   return MODEL_PRICING["default"]!;
 }

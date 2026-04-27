@@ -16,8 +16,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { getPricing } from "../shared/model-pricing";
 import { emitDegradation } from "../shared/degradation";
-export { emitDegradation };
-export type { DegradationEntry } from "../shared/degradation";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -81,8 +79,8 @@ export function calcCost(
 
 export function getDevIdentity(): string {
   // 1. Explicit override
-  if (process.env.LANGFUSE_USER_ID) return process.env.LANGFUSE_USER_ID;
-  if (process.env.CLAUDE_DEV_NAME) return process.env.CLAUDE_DEV_NAME;
+  if (process.env["LANGFUSE_USER_ID"]) return process.env["LANGFUSE_USER_ID"];
+  if (process.env["CLAUDE_DEV_NAME"]) return process.env["CLAUDE_DEV_NAME"];
 
   // 2. Git config email — best automatic option, already set on every dev machine
   try {
@@ -128,8 +126,8 @@ export type BillingTier =
 
 export function getBillingTier(serviceTier?: string): BillingTier {
   if (
-    process.env.CLAUDE_CODE_USE_VERTEX === "1" ||
-    process.env.CLAUDE_CODE_USE_VERTEX === "true"
+    process.env["CLAUDE_CODE_USE_VERTEX"] === "1" ||
+    process.env["CLAUDE_CODE_USE_VERTEX"] === "true"
   ) {
     return "vertex-gcp";
   }
@@ -162,12 +160,12 @@ export function readTierFile(): TierFile | null {
     const p = path.join(os.homedir(), ".atlax-ai", "tier.json");
     const raw = JSON.parse(readFileSync(p, "utf-8")) as Record<string, unknown>;
     if (
-      !VALID_TIERS.has(raw.tier as string) ||
-      !VALID_SOURCES.has(raw.source as string)
+      !VALID_TIERS.has(raw["tier"] as string) ||
+      !VALID_SOURCES.has(raw["source"] as string)
     ) {
       emitDegradation(
         "readTierFile:invalid-shape",
-        new Error(`unexpected tier=${raw.tier} source=${raw.source}`),
+        new Error(`unexpected tier=${raw["tier"]} source=${raw["source"]}`),
       );
       return null;
     }
@@ -198,10 +196,10 @@ export function detectOS(): OSName {
 
 async function sendToLangfuse(batch: unknown[]): Promise<void> {
   const host = (
-    process.env.LANGFUSE_HOST ?? "https://cloud.langfuse.com"
+    process.env["LANGFUSE_HOST"] ?? "https://cloud.langfuse.com"
   ).replace(/\/$/, "");
-  const publicKey = process.env.LANGFUSE_PUBLIC_KEY;
-  const secretKey = process.env.LANGFUSE_SECRET_KEY;
+  const publicKey = process.env["LANGFUSE_PUBLIC_KEY"];
+  const secretKey = process.env["LANGFUSE_SECRET_KEY"];
 
   if (!publicKey || !secretKey) {
     process.stderr.write(

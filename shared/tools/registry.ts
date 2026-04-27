@@ -14,7 +14,10 @@ import type { AgentTool, AgentType } from "./types";
 import { queryLangfuseTrace } from "./query-langfuse-trace";
 import { annotateObservation } from "./annotate-observation";
 
-const REGISTRY: readonly AgentTool<any, any>[] = [
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyTool = AgentTool<any, any>;
+
+const REGISTRY: readonly AnyTool[] = [
   queryLangfuseTrace,
   annotateObservation,
 ] as const;
@@ -22,7 +25,7 @@ const REGISTRY: readonly AgentTool<any, any>[] = [
 /**
  * Lista todas las tools autorizadas para un agent type.
  */
-export function listToolsForAgent(agentType: AgentType): AgentTool<any, any>[] {
+export function listToolsForAgent(agentType: AgentType): AnyTool[] {
   return REGISTRY.filter((t) => t.allowedAgentTypes.includes(agentType));
 }
 
@@ -30,10 +33,7 @@ export function listToolsForAgent(agentType: AgentType): AgentTool<any, any>[] {
  * Retrieve una tool por nombre. Retorna null si no existe o si el agent
  * no está autorizado.
  */
-export function getTool(
-  name: string,
-  agentType: AgentType,
-): AgentTool<any, any> | null {
+export function getTool(name: string, agentType: AgentType): AnyTool | null {
   const t = REGISTRY.find((x) => x.name === name);
   if (!t) return null;
   if (!t.allowedAgentTypes.includes(agentType)) return null;

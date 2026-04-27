@@ -12,9 +12,9 @@ import { getPricing } from "./model-pricing";
 export interface AggregateResult {
   turns: number;
   totalCost: number;
-  start?: string;
-  end?: string;
-  cwd?: string;
+  start?: string | undefined;
+  end?: string | undefined;
+  cwd?: string | undefined;
   models: Map<string, ModelAgg>;
 }
 
@@ -57,24 +57,24 @@ export function aggregateLines(lines: string[]): AggregateResult {
       continue;
     }
 
-    if (e.timestamp && typeof e.timestamp === "string") {
-      start ??= e.timestamp;
-      end = e.timestamp;
+    if (e["timestamp"] && typeof e["timestamp"] === "string") {
+      start ??= e["timestamp"];
+      end = e["timestamp"];
     }
-    if (e.cwd && typeof e.cwd === "string" && !cwd) cwd = e.cwd;
-    if (e.type !== "assistant") continue;
+    if (e["cwd"] && typeof e["cwd"] === "string" && !cwd) cwd = e["cwd"];
+    if (e["type"] !== "assistant") continue;
 
-    const msg = e.message as Record<string, unknown> | undefined;
-    const u = msg?.usage as Record<string, number> | undefined;
+    const msg = e["message"] as Record<string, unknown> | undefined;
+    const u = msg?.["usage"] as Record<string, number> | undefined;
     if (!u) continue;
 
     turns++;
-    const model = (msg?.model as string) ?? "unknown";
+    const model = (msg?.["model"] as string) ?? "unknown";
     const p = getPricing(model);
-    const inputTokens = u.input_tokens ?? 0;
-    const outputTokens = u.output_tokens ?? 0;
-    const cacheCreation = u.cache_creation_input_tokens ?? 0;
-    const cacheRead = u.cache_read_input_tokens ?? 0;
+    const inputTokens = u["input_tokens"] ?? 0;
+    const outputTokens = u["output_tokens"] ?? 0;
+    const cacheCreation = u["cache_creation_input_tokens"] ?? 0;
+    const cacheRead = u["cache_read_input_tokens"] ?? 0;
     const cost =
       (inputTokens * p.input +
         cacheCreation * p.cacheWrite +
@@ -93,7 +93,8 @@ export function aggregateLines(lines: string[]): AggregateResult {
         outputTokens,
         cacheCreationTokens: cacheCreation,
         cacheReadTokens: cacheRead,
-        serviceTier: (u.service_tier as unknown as string) ?? "",
+        serviceTier:
+          typeof u["service_tier"] === "string" ? u["service_tier"] : "",
       });
     } else {
       existing.turns++;
@@ -102,8 +103,8 @@ export function aggregateLines(lines: string[]): AggregateResult {
       existing.outputTokens += outputTokens;
       existing.cacheCreationTokens += cacheCreation;
       existing.cacheReadTokens += cacheRead;
-      if (u.service_tier)
-        existing.serviceTier = u.service_tier as unknown as string;
+      if (typeof u["service_tier"] === "string")
+        existing.serviceTier = u["service_tier"];
     }
   }
 

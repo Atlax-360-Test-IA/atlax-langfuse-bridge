@@ -41,7 +41,7 @@ export interface SandboxedExecutionOutput {
 export function getSandboxMode(
   env: NodeJS.ProcessEnv = process.env,
 ): SandboxMode {
-  const raw = env.LANGFUSE_BRIDGE_SANDBOX_MODE;
+  const raw = env["LANGFUSE_BRIDGE_SANDBOX_MODE"];
   switch (raw) {
     case "echo":
     case "fixture":

@@ -7,6 +7,11 @@
     "types": ["bun-types"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true

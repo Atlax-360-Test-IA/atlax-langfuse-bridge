@@ -23,38 +23,38 @@ describe("detectTier — tier resolution order", () => {
   });
 
   test("vertex-gcp when CLAUDE_CODE_USE_VERTEX=1", () => {
-    process.env.CLAUDE_CODE_USE_VERTEX = "1";
-    delete process.env.ANTHROPIC_API_KEY;
+    process.env["CLAUDE_CODE_USE_VERTEX"] = "1";
+    delete process.env["ANTHROPIC_API_KEY"];
     const t = detectTier();
     expect(t.tier).toBe("vertex-gcp");
     expect(t.source).toBe("env-vertex");
   });
 
   test("vertex-gcp when CLAUDE_CODE_USE_VERTEX=true", () => {
-    process.env.CLAUDE_CODE_USE_VERTEX = "true";
+    process.env["CLAUDE_CODE_USE_VERTEX"] = "true";
     const t = detectTier();
     expect(t.tier).toBe("vertex-gcp");
     expect(t.source).toBe("env-vertex");
   });
 
   test("vertex includes project ID as account when set", () => {
-    process.env.CLAUDE_CODE_USE_VERTEX = "1";
-    process.env.ANTHROPIC_VERTEX_PROJECT_ID = "my-gcp-project";
+    process.env["CLAUDE_CODE_USE_VERTEX"] = "1";
+    process.env["ANTHROPIC_VERTEX_PROJECT_ID"] = "my-gcp-project";
     const t = detectTier();
     expect(t.account).toBe("my-gcp-project");
-    process.env.ANTHROPIC_VERTEX_PROJECT_ID = undefined;
+    process.env["ANTHROPIC_VERTEX_PROJECT_ID"] = undefined;
   });
 
   test("vertex account is null when project ID not set", () => {
-    process.env.CLAUDE_CODE_USE_VERTEX = "1";
-    delete process.env.ANTHROPIC_VERTEX_PROJECT_ID;
+    process.env["CLAUDE_CODE_USE_VERTEX"] = "1";
+    delete process.env["ANTHROPIC_VERTEX_PROJECT_ID"];
     const t = detectTier();
     expect(t.account).toBeNull();
   });
 
   test("api-direct when ANTHROPIC_API_KEY is set (no vertex)", () => {
-    delete process.env.CLAUDE_CODE_USE_VERTEX;
-    process.env.ANTHROPIC_API_KEY = "sk-ant-test-key";
+    delete process.env["CLAUDE_CODE_USE_VERTEX"];
+    process.env["ANTHROPIC_API_KEY"] = "sk-ant-test-key";
     const t = detectTier();
     expect(t.tier).toBe("api-direct");
     expect(t.source).toBe("env-api-key");
@@ -62,15 +62,15 @@ describe("detectTier — tier resolution order", () => {
   });
 
   test("vertex takes precedence over ANTHROPIC_API_KEY", () => {
-    process.env.CLAUDE_CODE_USE_VERTEX = "1";
-    process.env.ANTHROPIC_API_KEY = "sk-ant-test-key";
+    process.env["CLAUDE_CODE_USE_VERTEX"] = "1";
+    process.env["ANTHROPIC_API_KEY"] = "sk-ant-test-key";
     const t = detectTier();
     expect(t.tier).toBe("vertex-gcp");
   });
 
   test("seat-team when credentials.json exists (I-8: only checks existence)", () => {
-    delete process.env.CLAUDE_CODE_USE_VERTEX;
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env["CLAUDE_CODE_USE_VERTEX"];
+    delete process.env["ANTHROPIC_API_KEY"];
     // Mock existsSync to simulate credentials file present
     const spy = spyOn(fs, "existsSync").mockReturnValue(true);
     const t = detectTier();
@@ -81,8 +81,8 @@ describe("detectTier — tier resolution order", () => {
   });
 
   test("unknown when no env vars and no credentials file", () => {
-    delete process.env.CLAUDE_CODE_USE_VERTEX;
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env["CLAUDE_CODE_USE_VERTEX"];
+    delete process.env["ANTHROPIC_API_KEY"];
     const spy = spyOn(fs, "existsSync").mockReturnValue(false);
     const t = detectTier();
     spy.mockRestore();
@@ -92,7 +92,7 @@ describe("detectTier — tier resolution order", () => {
   });
 
   test("detectedAt is a valid ISO timestamp", () => {
-    process.env.CLAUDE_CODE_USE_VERTEX = "1";
+    process.env["CLAUDE_CODE_USE_VERTEX"] = "1";
     const t = detectTier();
     expect(t.detectedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });

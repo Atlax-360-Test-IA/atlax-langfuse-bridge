@@ -50,18 +50,18 @@ describe("toMcpTool", () => {
 
   test("string with enum preserved", () => {
     const desc = toMcpTool(sampleTool);
-    expect(desc.inputSchema.properties.mode!.enum).toEqual(["a", "b", "c"]);
+    expect(desc.inputSchema.properties["mode"]!.enum).toEqual(["a", "b", "c"]);
   });
 
   test("array property maps items recursively", () => {
     const desc = toMcpTool(sampleTool);
-    expect(desc.inputSchema.properties.tags!.type).toBe("array");
-    expect(desc.inputSchema.properties.tags!.items!.type).toBe("string");
+    expect(desc.inputSchema.properties["tags"]!.type).toBe("array");
+    expect(desc.inputSchema.properties["tags"]!.items!.type).toBe("string");
   });
 
   test("description on properties is preserved", () => {
     const desc = toMcpTool(sampleTool);
-    expect(desc.inputSchema.properties.id!.description).toBe("ID");
+    expect(desc.inputSchema.properties["id"]!.description).toBe("ID");
   });
 });
 

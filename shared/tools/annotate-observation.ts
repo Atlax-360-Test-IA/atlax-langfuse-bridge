@@ -79,38 +79,38 @@ export const annotateObservation: AgentTool<AnnotateInput, AnnotateOutput> = {
       return { ok: false, error: "input must be an object" };
     }
     const r = raw as Record<string, unknown>;
-    if (typeof r.traceId !== "string" || r.traceId.length === 0) {
+    if (typeof r["traceId"] !== "string" || r["traceId"].length === 0) {
       return {
         ok: false,
         error: "traceId is required and must be non-empty string",
       };
     }
-    if (typeof r.name !== "string" || r.name.length === 0) {
+    if (typeof r["name"] !== "string" || r["name"].length === 0) {
       return {
         ok: false,
         error: "name is required and must be non-empty string",
       };
     }
     if (
-      r.value === undefined ||
-      (typeof r.value !== "number" &&
-        typeof r.value !== "string" &&
-        typeof r.value !== "boolean")
+      r["value"] === undefined ||
+      (typeof r["value"] !== "number" &&
+        typeof r["value"] !== "string" &&
+        typeof r["value"] !== "boolean")
     ) {
       return {
         ok: false,
         error: "value is required (number | string | boolean)",
       };
     }
-    if (r.observationId !== undefined && typeof r.observationId !== "string") {
+    if (r["observationId"] !== undefined && typeof r["observationId"] !== "string") {
       return { ok: false, error: "observationId must be string if provided" };
     }
-    if (r.comment !== undefined && typeof r.comment !== "string") {
+    if (r["comment"] !== undefined && typeof r["comment"] !== "string") {
       return { ok: false, error: "comment must be string if provided" };
     }
-    if (r.dataType !== undefined) {
+    if (r["dataType"] !== undefined) {
       if (
-        !["NUMERIC", "CATEGORICAL", "BOOLEAN"].includes(r.dataType as string)
+        !["NUMERIC", "CATEGORICAL", "BOOLEAN"].includes(r["dataType"] as string)
       ) {
         return {
           ok: false,

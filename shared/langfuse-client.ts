@@ -29,30 +29,32 @@ export interface LangfuseTrace {
 }
 
 export interface TraceListParams {
-  tags?: string[];
-  userId?: string;
-  sessionId?: string;
-  fromTimestamp?: string;
-  toTimestamp?: string;
-  limit?: number;
-  orderBy?: string;
+  tags?: string[] | undefined;
+  userId?: string | undefined;
+  sessionId?: string | undefined;
+  fromTimestamp?: string | undefined;
+  toTimestamp?: string | undefined;
+  limit?: number | undefined;
+  orderBy?: string | undefined;
 }
 
 export interface ScoreBody {
-  id?: string;
+  id?: string | undefined;
   traceId: string;
-  observationId?: string;
+  observationId?: string | undefined;
   name: string;
   value: number | string | boolean;
-  dataType?: "NUMERIC" | "CATEGORICAL" | "BOOLEAN";
-  comment?: string;
+  dataType?: "NUMERIC" | "CATEGORICAL" | "BOOLEAN" | undefined;
+  comment?: string | undefined;
 }
 
 function buildConfig(override?: Partial<LangfuseConfig>): LangfuseConfig {
   const host =
-    override?.host ?? process.env.LANGFUSE_HOST ?? "https://cloud.langfuse.com";
-  const publicKey = override?.publicKey ?? process.env.LANGFUSE_PUBLIC_KEY;
-  const secretKey = override?.secretKey ?? process.env.LANGFUSE_SECRET_KEY;
+    override?.host ??
+    process.env["LANGFUSE_HOST"] ??
+    "https://cloud.langfuse.com";
+  const publicKey = override?.publicKey ?? process.env["LANGFUSE_PUBLIC_KEY"];
+  const secretKey = override?.secretKey ?? process.env["LANGFUSE_SECRET_KEY"];
   if (!publicKey || !secretKey) {
     throw new Error(
       "[langfuse-client] LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY missing",

@@ -5,9 +5,8 @@ import {
   detectOS,
   getDevIdentity,
   getProjectName,
-  emitDegradation,
-  type DegradationEntry,
 } from "./langfuse-sync";
+import { emitDegradation, type DegradationEntry } from "../shared/degradation";
 
 // ─── calcCost ───────────────────────────────────────────────────────────────
 
@@ -70,32 +69,32 @@ describe("getBillingTier", () => {
   });
 
   test("returns vertex-gcp when CLAUDE_CODE_USE_VERTEX=1", () => {
-    process.env.CLAUDE_CODE_USE_VERTEX = "1";
+    process.env["CLAUDE_CODE_USE_VERTEX"] = "1";
     expect(getBillingTier()).toBe("vertex-gcp");
   });
 
   test("returns vertex-gcp when CLAUDE_CODE_USE_VERTEX=true", () => {
-    process.env.CLAUDE_CODE_USE_VERTEX = "true";
+    process.env["CLAUDE_CODE_USE_VERTEX"] = "true";
     expect(getBillingTier()).toBe("vertex-gcp");
   });
 
   test("vertex takes precedence over priority service tier", () => {
-    process.env.CLAUDE_CODE_USE_VERTEX = "1";
+    process.env["CLAUDE_CODE_USE_VERTEX"] = "1";
     expect(getBillingTier("priority")).toBe("vertex-gcp");
   });
 
   test("returns anthropic-priority-overage for priority tier", () => {
-    delete process.env.CLAUDE_CODE_USE_VERTEX;
+    delete process.env["CLAUDE_CODE_USE_VERTEX"];
     expect(getBillingTier("priority")).toBe("anthropic-priority-overage");
   });
 
   test("returns anthropic-team-standard for standard tier", () => {
-    delete process.env.CLAUDE_CODE_USE_VERTEX;
+    delete process.env["CLAUDE_CODE_USE_VERTEX"];
     expect(getBillingTier("standard")).toBe("anthropic-team-standard");
   });
 
   test("returns anthropic-team-standard when no tier specified", () => {
-    delete process.env.CLAUDE_CODE_USE_VERTEX;
+    delete process.env["CLAUDE_CODE_USE_VERTEX"];
     expect(getBillingTier()).toBe("anthropic-team-standard");
     expect(getBillingTier(undefined)).toBe("anthropic-team-standard");
   });
@@ -134,19 +133,19 @@ describe("getDevIdentity", () => {
   });
 
   test("prefers LANGFUSE_USER_ID env var", () => {
-    process.env.LANGFUSE_USER_ID = "explicit-user@test.com";
+    process.env["LANGFUSE_USER_ID"] = "explicit-user@test.com";
     expect(getDevIdentity()).toBe("explicit-user@test.com");
   });
 
   test("falls back to CLAUDE_DEV_NAME", () => {
-    delete process.env.LANGFUSE_USER_ID;
-    process.env.CLAUDE_DEV_NAME = "dev-name";
+    delete process.env["LANGFUSE_USER_ID"];
+    process.env["CLAUDE_DEV_NAME"] = "dev-name";
     expect(getDevIdentity()).toBe("dev-name");
   });
 
   test("falls back to git config email", () => {
-    delete process.env.LANGFUSE_USER_ID;
-    delete process.env.CLAUDE_DEV_NAME;
+    delete process.env["LANGFUSE_USER_ID"];
+    delete process.env["CLAUDE_DEV_NAME"];
     const identity = getDevIdentity();
     // Should be a non-empty string (git email or OS username)
     expect(identity.length).toBeGreaterThan(0);

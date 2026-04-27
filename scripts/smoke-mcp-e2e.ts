@@ -111,12 +111,12 @@ async function waitForTrace(
 async function main(): Promise<number> {
   loadEnvFile();
 
-  const host = (process.env.LANGFUSE_HOST ?? "http://localhost:3000").replace(
+  const host = (process.env["LANGFUSE_HOST"] ?? "http://localhost:3000").replace(
     /\/$/,
     "",
   );
-  const pk = process.env.LANGFUSE_PUBLIC_KEY;
-  const sk = process.env.LANGFUSE_SECRET_KEY;
+  const pk = process.env["LANGFUSE_PUBLIC_KEY"];
+  const sk = process.env["LANGFUSE_SECRET_KEY"];
 
   if (!pk || !sk) {
     log("LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY not set — SKIP");

@@ -94,29 +94,29 @@ export const queryLangfuseTrace: AgentTool<QueryTraceInput, QueryTraceOutput> =
         return { ok: false, error: "input must be an object" };
       }
       const r = raw as Record<string, unknown>;
-      if (r.traceId !== undefined && typeof r.traceId !== "string") {
+      if (r["traceId"] !== undefined && typeof r["traceId"] !== "string") {
         return { ok: false, error: "traceId must be string" };
       }
-      if (r.userId !== undefined && typeof r.userId !== "string") {
+      if (r["userId"] !== undefined && typeof r["userId"] !== "string") {
         return { ok: false, error: "userId must be string" };
       }
-      if (r.sessionId !== undefined && typeof r.sessionId !== "string") {
+      if (r["sessionId"] !== undefined && typeof r["sessionId"] !== "string") {
         return { ok: false, error: "sessionId must be string" };
       }
-      if (r.tags !== undefined && !isStringArray(r.tags)) {
+      if (r["tags"] !== undefined && !isStringArray(r["tags"])) {
         return { ok: false, error: "tags must be string[]" };
       }
       if (
-        r.fromTimestamp !== undefined &&
-        typeof r.fromTimestamp !== "string"
+        r["fromTimestamp"] !== undefined &&
+        typeof r["fromTimestamp"] !== "string"
       ) {
         return { ok: false, error: "fromTimestamp must be string" };
       }
-      if (r.toTimestamp !== undefined && typeof r.toTimestamp !== "string") {
+      if (r["toTimestamp"] !== undefined && typeof r["toTimestamp"] !== "string") {
         return { ok: false, error: "toTimestamp must be string" };
       }
-      if (r.limit !== undefined) {
-        if (typeof r.limit !== "number" || r.limit <= 0 || r.limit > 100) {
+      if (r["limit"] !== undefined) {
+        if (typeof r["limit"] !== "number" || r["limit"] <= 0 || r["limit"] > 100) {
           return { ok: false, error: "limit must be number in [1, 100]" };
         }
       }
@@ -164,12 +164,12 @@ export const queryLangfuseTrace: AgentTool<QueryTraceInput, QueryTraceOutput> =
           tags: t.tags,
           metadata: t.metadata,
           estimatedCostUSD:
-            typeof t.metadata?.estimatedCostUSD === "number"
-              ? (t.metadata.estimatedCostUSD as number)
+            typeof t.metadata?.["estimatedCostUSD"] === "number"
+              ? (t.metadata["estimatedCostUSD"] as number)
               : null,
           turns:
-            typeof t.metadata?.turns === "number"
-              ? (t.metadata.turns as number)
+            typeof t.metadata?.["turns"] === "number"
+              ? (t.metadata["turns"] as number)
               : null,
         })),
         fromCache: false,
