@@ -32,8 +32,9 @@ debe crear duplicados, solo actualizar turns/cost/timestamps.
 El payload Stop trae un `cwd` que a veces no coincide con dónde arrancó la
 sesión (happy wrapper, subshells, etc.). Esto contamina tags de proyecto.
 **Regla**: `sessionCwd = primer entry con .cwd` (fallback al Stop event).
-Ver `hooks/langfuse-sync.ts` líneas 257 y 304. Previamente produjo tags
-ruidosos (`project:jgcalvo` en vez de `project:owner/repo`).
+Implementado vía `aggregateLines()` en `shared/aggregate.ts` — el campo `cwd`
+se extrae en el primer pass del JSONL. Previamente produjo tags ruidosos
+(`project:jgcalvo` en vez de `project:owner/repo`).
 
 ### I-4 · Tags son UNION en upsert (no replacement)
 
@@ -61,11 +62,46 @@ Escrito por `scripts/detect-tier.ts` vía statusline. Leído por el hook. El
 billing heurístico (`billing:*`) se mantiene por retrocompatibilidad pero
 la fuente autoritativa son los tags `tier:*` y `tier-source:*`.
 
-### I-8 · Nunca leer `~/.claude/.credentials.json`
+### I-8 · Nunca parsear `~/.claude/.credentials.json`
 
-Regla global heredada. `detect-tier.ts` comprueba existencia del archivo
-pero NO parsea el contenido para extraer email (lo intentaba antes; se
-quitó). `account` queda `null` en tier.json cuando la fuente es OAuth.
+`detect-tier.ts` puede comprobar la **existencia** del archivo (para inferir
+tier `seat-team` en OAuth) pero NUNCA parsea su contenido ni extrae email.
+El motivo: el archivo contiene tokens de sesión Anthropic. `account` queda
+`null` en tier.json cuando la fuente es OAuth — esto es intencional.
+
+### I-9 · Generación IDs deterministas — usar timestamp del turn, no Date.now()
+
+Los IDs de generation en el batch Langfuse deben ser deterministas para
+que el reconciler sea idempotente. Usar `turn.timestamp` (del JSONL), nunca
+`Date.now()` ni `new Date().toISOString()` en el cuerpo del evento de
+generación. `Date.now()` produce un ID diferente en cada re-ejecución,
+rompiendo la deduplicación de Langfuse.
+
+### I-10 · MCP_AGENT_TYPE validado contra allowlist
+
+El env var `MCP_AGENT_TYPE` acepta solo los valores definidos en `AgentType`:
+`"coordinator" | "trace-analyst" | "annotator"`. Un valor desconocido loguea
+un warning a stderr y usa `"coordinator"` como fallback. No castear a
+`AgentType` sin validación previa.
+
+### I-11 · classifyDrift vive en shared/drift.ts (única fuente de verdad)
+
+La función `classifyDrift()` y el tipo `DriftStatus` viven en
+`shared/drift.ts`. No duplicar la lógica en scripts o tests. El reconciler
+importa desde ahí, los tests también.
+
+### I-12 · process.env restore en tests: guardar/restaurar keys específicas
+
+No usar `process.env = { ...origEnv }` para restaurar env en tests — asignar
+al proxy `process.env` puede no funcionar correctamente. Patrón correcto:
+
+```typescript
+const saved = process.env["MY_VAR"];
+afterEach(() => {
+  if (saved !== undefined) process.env["MY_VAR"] = saved;
+  else delete process.env["MY_VAR"];
+});
+```
 
 ## Comandos de operación
 

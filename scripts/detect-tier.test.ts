@@ -1,11 +1,25 @@
 import { describe, expect, test, afterEach } from "bun:test";
 import { detectTier, type TierFile } from "./detect-tier";
 
+const ENV_KEYS = [
+  "CLAUDE_CODE_USE_VERTEX",
+  "ANTHROPIC_VERTEX_PROJECT_ID",
+  "ANTHROPIC_API_KEY",
+] as const;
+
 describe("detectTier", () => {
-  const origEnv = { ...process.env };
+  const saved: Partial<Record<(typeof ENV_KEYS)[number], string>> = {};
+
+  // Save only the specific keys we mutate — avoids process.env = {...} anti-pattern
+  for (const k of ENV_KEYS) {
+    if (process.env[k] !== undefined) saved[k] = process.env[k];
+  }
 
   afterEach(() => {
-    process.env = { ...origEnv };
+    for (const k of ENV_KEYS) {
+      if (saved[k] !== undefined) process.env[k] = saved[k];
+      else delete process.env[k];
+    }
   });
 
   test("vertex-gcp when CLAUDE_CODE_USE_VERTEX=1", () => {
