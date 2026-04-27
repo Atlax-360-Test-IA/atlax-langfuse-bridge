@@ -4,6 +4,8 @@
  * Bridge between MAIN world CustomEvents and the background service worker.
  * The MAIN world cannot call chrome.runtime directly; this script can.
  */
+import { validateUser, validateTurn } from "./validators.js";
+
 (function () {
   "use strict";
 
@@ -11,15 +13,19 @@
   let cachedEmail = "unknown";
 
   window.addEventListener("__atlax_user__", (e) => {
-    cachedEmail = e.detail.email;
+    const validated = validateUser(e.detail);
+    if (!validated) return;
+    cachedEmail = validated.email;
     chrome.runtime.sendMessage({ type: "USER_INFO", email: cachedEmail });
   });
 
   window.addEventListener("__atlax_turn__", (e) => {
+    const validated = validateTurn(e.detail);
+    if (!validated) return;
     chrome.runtime.sendMessage({
       type: "CONVERSATION_TURN",
       userEmail: cachedEmail,
-      ...e.detail,
+      ...validated,
     });
   });
 })();

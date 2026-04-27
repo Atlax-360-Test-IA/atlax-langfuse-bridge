@@ -77,6 +77,10 @@ async function getTrace(id: string): Promise<LangfuseTrace | null> {
 
 // ─── Replay hook with reconstructed Stop payload ─────────────────────────────
 
+// Safe session ID: only alphanumeric, hyphens, underscores (UUID format).
+// Prevents path traversal if the filename ever influences a downstream path.
+export const SAFE_SID_RE = /^[0-9a-zA-Z_-]+$/;
+
 async function replayHook(
   sessionId: string,
   transcriptPath: string,
@@ -101,7 +105,18 @@ async function replayHook(
     let stderr = "";
     proc.stderr.on("data", (c: Buffer) => (stderr += c.toString()));
 
+    // C3: kill the subprocess if it doesn't finish within 30 s.
+    // Without this guard the reconciler can hang indefinitely when the hook
+    // stalls (e.g. Langfuse unreachable + no timeout on the hook side).
+    const timer = setTimeout(() => {
+      proc.kill("SIGTERM");
+      log("error", "hook-replay-timeout", {
+        sessionId: sessionId.slice(0, 8),
+      });
+    }, 30_000);
+
     proc.on("close", (code) => {
+      clearTimeout(timer);
       if (code !== 0) {
         log("error", "hook-replay-failed", {
           sessionId,
@@ -115,6 +130,7 @@ async function replayHook(
     });
 
     proc.on("error", (err) => {
+      clearTimeout(timer);
       log("error", "hook-spawn-error", {
         sessionId,
         error: err.message,
@@ -179,6 +195,15 @@ async function main() {
       .split("/")
       .pop()!
       .replace(/\.jsonl$/, "");
+
+    // C4: reject filenames that don't match the expected UUID-like pattern.
+    // A malformed filename (e.g. "../secret") could propagate as a trace ID
+    // or path component in downstream calls.
+    if (!SAFE_SID_RE.test(sid)) {
+      log("warn", "skipping-invalid-sid", { path: p });
+      continue;
+    }
+
     if (sid === EXCLUDE_SESSION) continue;
 
     const tid = `cc-${sid}`;
