@@ -10,6 +10,7 @@
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],
+  "optional_host_permissions": ["https://*/*"],
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
@@ -31,7 +32,7 @@
   ],
 
   "content_security_policy": {
-    "extension_pages": "default-src 'none'; script-src 'self'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; style-src 'self' 'unsafe-inline'"
+    "extension_pages": "default-src 'none'; script-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:*; style-src 'self' 'unsafe-inline'"
   },
 
   "action": {

@@ -48,11 +48,34 @@ export interface ScoreBody {
   comment?: string | undefined;
 }
 
+// Allowlist for LANGFUSE_HOST — prevents SSRF via misconfigured env var.
+// Accepts HTTPS for any host, or HTTP for localhost/127.0.0.1 only.
+export function isSafeHost(raw: string): boolean {
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > 2048)
+    return false;
+  if (raw.includes("/../") || raw.includes("/..%2F") || raw.includes("%2F.."))
+    return false;
+  try {
+    const u = new URL(raw);
+    if (u.protocol === "https:") return true;
+    if (u.protocol === "http:")
+      return u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function buildConfig(override?: Partial<LangfuseConfig>): LangfuseConfig {
   const host =
     override?.host ??
     process.env["LANGFUSE_HOST"] ??
     "https://cloud.langfuse.com";
+  if (!isSafeHost(host)) {
+    throw new Error(
+      `[langfuse-client] LANGFUSE_HOST blocked (must be https:// or http://localhost): ${host}`,
+    );
+  }
   const publicKey = override?.publicKey ?? process.env["LANGFUSE_PUBLIC_KEY"];
   const secretKey = override?.secretKey ?? process.env["LANGFUSE_SECRET_KEY"];
   if (!publicKey || !secretKey) {

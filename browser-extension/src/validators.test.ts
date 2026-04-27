@@ -31,9 +31,18 @@ describe("validateUser", () => {
     expect(validateUser({ email: 123 })).toBeNull();
   });
 
-  test("accepts email exactly 256 chars", () => {
-    const email = "a".repeat(256);
-    expect(validateUser({ email })).toEqual({ email });
+  test("returns null for string without @ (not an email)", () => {
+    expect(validateUser({ email: "notanemail" })).toBeNull();
+  });
+
+  test("returns null for string with @ but no domain dot", () => {
+    expect(validateUser({ email: "user@nodot" })).toBeNull();
+  });
+
+  test("accepts well-formed email within length limit", () => {
+    expect(validateUser({ email: "user@example.com" })).toEqual({
+      email: "user@example.com",
+    });
   });
 });
 

@@ -4,11 +4,15 @@
  * without a Chrome extension environment.
  */
 
+// Pragmatic email check: local@domain.tld — rejects non-email strings.
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
+
 export function validateUser(detail) {
   if (!detail || typeof detail !== "object") return null;
+  const raw = detail.email;
   const email =
-    typeof detail.email === "string" && detail.email.length <= 256
-      ? detail.email
+    typeof raw === "string" && raw.length <= 256 && EMAIL_RE.test(raw)
+      ? raw
       : null;
   return email ? { email } : null;
 }

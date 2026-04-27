@@ -13,6 +13,7 @@ import {
   mock,
 } from "bun:test";
 import type { LangfuseTrace, ScoreBody } from "./langfuse-client";
+import { isSafeHost } from "./langfuse-client";
 
 // ─── fetch mock helpers ───────────────────────────────────────────────────────
 
@@ -280,5 +281,41 @@ describe("createScore", () => {
     await expect(
       createScore({ traceId: "cc-123", name: "x", value: 1 }),
     ).rejects.toThrow("422");
+  });
+});
+
+// ─── isSafeHost ──────────────────────────────────────────────────────────────
+
+describe("isSafeHost", () => {
+  test("accepts https:// for any hostname", () => {
+    expect(isSafeHost("https://langfuse.example.com")).toBe(true);
+    expect(isSafeHost("https://cloud.langfuse.com")).toBe(true);
+  });
+
+  test("accepts http://localhost with port", () => {
+    expect(isSafeHost("http://localhost:3000")).toBe(true);
+  });
+
+  test("accepts http://127.0.0.1 with port", () => {
+    expect(isSafeHost("http://127.0.0.1:3000")).toBe(true);
+  });
+
+  test("rejects http:// with non-localhost hostname (SSRF)", () => {
+    expect(isSafeHost("http://169.254.169.254/latest/meta-data/")).toBe(false);
+    expect(isSafeHost("http://internal.corp.com")).toBe(false);
+  });
+
+  test("rejects file:// and javascript: schemes", () => {
+    expect(isSafeHost("file:///etc/passwd")).toBe(false);
+    expect(isSafeHost("javascript:alert(1)")).toBe(false);
+  });
+
+  test("rejects empty string and overlong string", () => {
+    expect(isSafeHost("")).toBe(false);
+    expect(isSafeHost("https://" + "a".repeat(2100))).toBe(false);
+  });
+
+  test("rejects path traversal in raw string", () => {
+    expect(isSafeHost("http://localhost/../../../etc/passwd")).toBe(false);
   });
 });
