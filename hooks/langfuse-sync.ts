@@ -17,6 +17,7 @@ import * as path from "node:path";
 import { getPricing } from "../shared/model-pricing";
 import { aggregateLines } from "../shared/aggregate";
 import { emitDegradation } from "../shared/degradation";
+import { isSafeHost } from "../shared/langfuse-client";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -196,9 +197,17 @@ export function detectOS(): OSName {
 // ─── Langfuse REST ingestion ──────────────────────────────────────────────────
 
 async function sendToLangfuse(batch: unknown[]): Promise<void> {
-  const host = (
-    process.env["LANGFUSE_HOST"] ?? "https://cloud.langfuse.com"
-  ).replace(/\/$/, "");
+  const rawHost = process.env["LANGFUSE_HOST"] ?? "https://cloud.langfuse.com";
+  if (!isSafeHost(rawHost)) {
+    await emitDegradation(
+      "sendToLangfuse:unsafe-host",
+      new Error(
+        `LANGFUSE_HOST blocked (must be https:// or http://localhost): ${rawHost}`,
+      ),
+    );
+    return;
+  }
+  const host = rawHost.replace(/\/$/, "");
   const publicKey = process.env["LANGFUSE_PUBLIC_KEY"];
   const secretKey = process.env["LANGFUSE_SECRET_KEY"];
 

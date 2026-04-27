@@ -7,11 +7,11 @@ function setStatus(text, cls) {
 }
 
 async function load() {
-  const cfg = await chrome.storage.sync.get([
-    "langfuseHost",
-    "publicKey",
-    "secretKey",
+  const [sync, local] = await Promise.all([
+    chrome.storage.sync.get(["langfuseHost", "publicKey"]),
+    chrome.storage.local.get(["secretKey"]),
   ]);
+  const cfg = { ...sync, ...local };
   if (cfg.langfuseHost) $("host").value = cfg.langfuseHost;
   if (cfg.publicKey) $("pk").value = cfg.publicKey;
   if (cfg.secretKey) $("sk").value = cfg.secretKey;
@@ -68,11 +68,10 @@ $("save").addEventListener("click", async () => {
     }
   }
 
-  await chrome.storage.sync.set({
-    langfuseHost: host,
-    publicKey: pk,
-    secretKey: sk,
-  });
+  await Promise.all([
+    chrome.storage.sync.set({ langfuseHost: host, publicKey: pk }),
+    chrome.storage.local.set({ secretKey: sk }),
+  ]);
   setStatus("Guardado. Verificando…", "wait");
   verify();
 });
