@@ -12,9 +12,9 @@
  * Pricing alineado con shared/model-pricing.ts (I-6 del CLAUDE.md).
  */
 
-import { estimateCost } from "./pricing.js";
 import { emitDegradation } from "./degradation.js";
 import { isSafeHost } from "./validators.js";
+import { buildTurnBatch } from "./batch-builder.js";
 
 // ── In-memory user cache ───────────────────────────────────────────────────
 let cachedEmail = "unknown";
@@ -67,64 +67,7 @@ async function handleTurn(turn) {
   }
 
   const userId = turn.userEmail || cachedEmail;
-  const convId = turn.conversationId || crypto.randomUUID();
-  const traceId = `claude-web-${convId}`;
-  const now = turn.timestamp || new Date().toISOString();
-  const cost = estimateCost(turn.model, turn.inputTokens, turn.outputTokens);
-
-  const tags = [
-    `surface:${turn.surface}`,
-    `platform:${turn.platform}`,
-    "entrypoint:claude-ai",
-    `tier:${turn.platform === "app" ? "claude-app" : "claude-web"}`,
-    "tier-source:browser-extension",
-  ];
-
-  const batch = [
-    // Upsert the trace (same id = same trace in Langfuse, safe to repeat)
-    {
-      id: crypto.randomUUID(),
-      type: "trace-create",
-      timestamp: now,
-      body: {
-        id: traceId,
-        name: "claude-ai-session",
-        userId,
-        sessionId: convId,
-        tags,
-        metadata: {
-          surface: turn.surface,
-          platform: turn.platform,
-          conversationId: convId,
-          model: turn.model,
-          conversationUrl: turn.url,
-        },
-      },
-    },
-    // One generation per assistant turn
-    {
-      id: crypto.randomUUID(),
-      type: "generation-create",
-      timestamp: now,
-      body: {
-        id: `${traceId}-${now}`,
-        traceId,
-        name: turn.model || "claude-web",
-        model: turn.model || "unknown",
-        usage: {
-          input: turn.inputTokens,
-          output: turn.outputTokens,
-          unit: "TOKENS",
-        },
-        costDetails: { estimatedUSD: Number(cost.toFixed(6)) },
-        metadata: {
-          surface: turn.surface,
-          platform: turn.platform,
-          estimatedCostUSD: cost,
-        },
-      },
-    },
-  ];
+  const batch = buildTurnBatch(turn, userId);
 
   const host = cfg.langfuseHost.replace(/\/$/, "");
   const creds = btoa(`${cfg.publicKey}:${cfg.secretKey}`);
