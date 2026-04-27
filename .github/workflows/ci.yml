@@ -13,6 +13,7 @@ jobs:
   test:
     name: Typecheck + Unit tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -44,6 +45,7 @@ jobs:
   smoke-e2e:
     name: Smoke E2E (skip-graceful without Langfuse secrets)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: test
     permissions:
       contents: read
@@ -74,6 +76,7 @@ jobs:
   smoke-litellm:
     name: Smoke LiteLLM (skip gracefully without gateway creds)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: test
     continue-on-error: true
     permissions:

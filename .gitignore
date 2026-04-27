@@ -24,3 +24,6 @@ dist/
 
 # Local session handoffs (not for the repo)
 .handoff-*.md
+
+# Artefacto de sesión: tilde literal creada por error (Claude plan artifact)
+~/

@@ -221,11 +221,12 @@ services:
     image: minio/mc:RELEASE.2025-04-03T17-07-56Z
     depends_on:
       minio:
-        condition: service_started
+        condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      sleep 5;
-      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      until mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; do
+        echo 'waiting for minio...'; sleep 1;
+      done;
       mc mb --ignore-existing local/langfuse;
       exit 0;
       "
