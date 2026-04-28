@@ -19,20 +19,32 @@ Semver retroactivo. Política:
 
 ### Added
 
-- `ARCHITECTURE.md` con SDD canónico §1-§14 + Apéndice A
-- `ORGANIZATION.md` con convenciones del ecosistema Atlax
-- `CHANGELOG.md` con semver retroactivo
-- `docs/adr/` con 7 ADRs Michael Nygard formales
-- `docs/operations/runbook.md` runbook operativo separado
-- Campo `version`, `description`, `keywords` en `package.json`
+- **Fase A** (PR #32 — `docs/sdd-canonical-structure`):
+  - `ARCHITECTURE.md` con scaffolding SDD canónico §1-§14 + Apéndice A (placeholders)
+  - `ORGANIZATION.md` con convenciones del ecosistema Atlax
+  - `CHANGELOG.md` con semver retroactivo v0.1.0 → v0.5.4
+  - `docs/adr/README.md` + 7 ADRs (header Nygard completo, contenido mínimo)
+  - `docs/operations/runbook.md` (placeholder)
+  - Campo `version: "0.5.4"`, `description`, `keywords`, `repository` en `package.json`
+- **Fase B** (este PR — `docs/sdd-content-migration`):
+  - `ARCHITECTURE.md` completado con contenido migrado de README + CLAUDE.md
+  - `docs/operations/runbook.md` completado (validar, reconcile, cron, LiteLLM, browser ext, rollback)
+  - `README.md` refactorizado a Quick Start + setup (~280 líneas, era 603)
+  - `CLAUDE.md` refactorizado preservando I-1..I-13 (~150 líneas, era 221)
+
+### Changed
+
+- README ya no contiene contenido arquitectónico — todo migrado a SDD
+- CLAUDE.md mantiene solo invariantes operativos (stack, topology, histórico bugs eliminados)
+- Punteros cruzados entre README ↔ ARCHITECTURE ↔ CLAUDE ↔ runbook ↔ ADRs
 
 ### ADR
 
-- ADR-001 a ADR-007 documentando decisiones arquitectónicas retroactivas
+- ADR-001 a ADR-007 documentando decisiones arquitectónicas retroactivas (contenido completo en Fase C)
 
 ### Metrics
 
-- Tests: 466 / expects: 814 / files: 35 (sin cambios — solo docs)
+- Tests: 466 / expects: 814 / files: 35 (sin cambios funcionales — solo docs)
 
 ---
 

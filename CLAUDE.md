@@ -3,6 +3,15 @@
 Project-specific rules for Claude Code when working on this repo. Extends the
 global `~/.claude/CLAUDE.md`.
 
+> 📖 **Arquitectura completa**: ver [`ARCHITECTURE.md`](./ARCHITECTURE.md) — SDD §1-§14.
+> 🛠️ **Operación día-a-día**: ver [`docs/operations/runbook.md`](./docs/operations/runbook.md).
+> 📋 **Decisiones formales**: ver [`docs/adr/`](./docs/adr/) (ADR-001..ADR-007).
+> 📜 **Cambios**: ver [`CHANGELOG.md`](./CHANGELOG.md).
+
+Este archivo solo contiene **instrucciones operativas para Claude Code en
+sesión** (invariantes, comandos rápidos, anti-patterns). Todo lo arquitectónico
+vive en `ARCHITECTURE.md`.
+
 ## What this project is
 
 Torre de observabilidad FinOps para el uso de Claude Code en Atlax360. Tres
@@ -15,6 +24,10 @@ piezas coordinadas:
 3. **Stack Langfuse v3 self-hosted** (`docker/`) — destino de todas las trazas.
 
 ## Invariantes no negociables
+
+> Estos invariantes son las reglas de comportamiento que Claude Code debe
+> respetar al editar este repo. Cada uno tiene cobertura de test (ver
+> [`ARCHITECTURE.md §10`](./ARCHITECTURE.md#§10--testing) para el mapeo).
 
 ### I-1 · Hook siempre `exit 0`
 
@@ -112,24 +125,11 @@ y los scripts de descubrimiento (`shared/jsonl-discovery.ts`, `shared/env-loader
 **dependen del filesystem local del developer** y por diseño se quedan en la
 máquina del dev — nunca van a Cloud Run.
 
-Razones:
-
-1. Los JSONLs viven en `~/.claude/projects/**/sessions/*.jsonl` — son escritos
-   por Claude Code en cada turno. Migrarlos centralizadamente requiere un
-   endpoint custom de upload (vector SSRF) o cambiar el modelo de eventos.
-2. `~/.atlax-ai/tier.json` se escribe desde la statusline de Claude Code en
-   la máquina del dev (autenticación local).
-3. `~/.atlax-ai/reconcile.env` es config por-dev (cada uno con su WINDOW_HOURS).
-4. El cron systemd/launchd vive en la máquina del dev.
-
-Lo que SÍ migra a Cloud Run en PRO: solo el stack Langfuse v3
-(`langfuse-web`, `langfuse-worker`, postgres → Cloud SQL, redis → Memorystore,
-clickhouse → ClickHouse Cloud o self-hosted, minio → GCS). El destino del
-hook (`LANGFUSE_HOST`) cambia de `http://localhost:3000` a `https://<cloud-run-url>`.
-
 **Cómo aplicar**: si una función toca `os.homedir()`, `~/.atlax-ai`,
 `~/.claude/projects` o `execSync("git ...")`, está en el lado "edge" del
 sistema y se queda local. Esto se valida en `tests/cloud-run-boundary.test.ts`.
+
+Razones detalladas y target topology PRO en [ADR-002](./docs/adr/ADR-002-edge-core-split.md).
 
 ## Comandos de operación
 
@@ -146,76 +146,37 @@ journalctl --user -u atlax-langfuse-reconcile.service -n 50
 
 # Actualizar tier manualmente
 bun run scripts/detect-tier.ts
+
+# Tests + typecheck
+bun run check
 ```
 
-## Stack
-
-- Runtime: **Bun** (hook + scripts, cero deps runtime)
-- Stack observabilidad: Langfuse v3 (postgres + clickhouse + redis + minio)
-- Deployment actual: docker-compose local (PoC)
-- Deployment futuro: ver división **edge/core** abajo (post-PoC)
-
-### Edge vs Core (post-PoC topology)
-
-| Componente                              | Lado | Hosting                  |
-| --------------------------------------- | ---- | ------------------------ |
-| `hooks/langfuse-sync.ts`                | edge | Máquina del dev          |
-| `scripts/reconcile-traces.ts` + systemd | edge | Máquina del dev          |
-| `scripts/detect-tier.ts`                | edge | Máquina del dev          |
-| `browser-extension/`                    | edge | Chrome del dev           |
-| `langfuse-web` + `langfuse-worker`      | core | Cloud Run                |
-| postgres                                | core | Cloud SQL (PITR enabled) |
-| redis                                   | core | Memorystore              |
-| clickhouse                              | core | ClickHouse Cloud o self  |
-| minio                                   | core | GCS bucket               |
-| `litellm-proxy` (opt-in gateway)        | core | Cloud Run                |
-
-Ver `infra/cloud-run.yaml` para el manifest de referencia (no aplicado en CI).
+Más comandos y diagnóstico en [`docs/operations/runbook.md`](./docs/operations/runbook.md).
 
 ## Anti-patterns a evitar
 
 - **No añadir dependencias npm al hook**: aumenta latencia de cierre de
-  sesión y riesgo de supply chain. Todo con APIs built-in de Bun/Node.
+  sesión y riesgo de supply chain. Todo con APIs built-in de Bun/Node. Ver
+  [ADR-001](./docs/adr/ADR-001-bun-cero-deps.md).
 - **No usar `console.log` en el hook**: stdout puede interferir con otros
-  hooks downstream. Usar `process.stderr.write()` para errores.
+  hooks downstream. Usar `process.stderr.write()` para errores estructurados (degradation log JSON).
 - **No hacer retries síncronos en el hook**: timeout es 10s duro. Si falla,
-  el reconciler lo recoge en la siguiente ventana.
+  el reconciler lo recoge en la siguiente ventana. Ver [ADR-006](./docs/adr/ADR-006-two-layer-consistency.md).
 - **No leer el JSONL en streaming**: `readFileSync` + `split("\n")` es más
   rápido para tamaños típicos (<50MB) y más simple que streaming.
+- **No editar ADRs existentes**: son inmutables. Si una decisión cambia, crear
+  ADR nuevo con `Status: Supersedes ADR-NNN` y marcar el viejo como `Superseded`.
 
-## Histórico de bugs relevantes
+## Mantenimiento del SDD
 
-| Fecha      | Bug                                           | Fix                                                                                      |
-| ---------- | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| 2026-04-21 | cwd del Stop event contamina tags de proyecto | Extraer cwd del primer JSONL entry con `.cwd`                                            |
-| 2026-04-20 | langfuse-web marcado (unhealthy)              | Healthcheck con `$(hostname -i)` porque Next.js bindea a IP del contenedor, no localhost |
+Cuando hagas cambios en el código que toquen al SDD:
 
-## Backlog — decisiones de cierre
+- **Renombrar módulo en `shared/` o `scripts/`**: actualizar `ARCHITECTURE.md §4` y las tablas que lo referencien
+- **Añadir nuevo invariante a este `CLAUDE.md`**: añadir fila al `ARCHITECTURE.md §10` (mapeo I-N → test) + Apéndice A
+- **Cambio de stack runtime**: actualizar `ARCHITECTURE.md §2` + ADR correspondiente (nuevo, no editar viejo)
+- **Nuevo módulo `shared/`**: actualizar tabla en `ARCHITECTURE.md §4`
+- **Cambio en CI/CD workflow**: actualizar `ARCHITECTURE.md §6`
 
-### Partial index `trace_id` — NO APLICA (2026-04-24)
-
-El item #5 del backlog (extraído de `atlax-observatorios/projects/orvian/BACKLOG.md`) refería
-a `CREATE UNIQUE INDEX ... WHERE trace_id IS NOT NULL` para una tabla SQL local de audit.
-**Este proyecto no tiene BD local.** Todo el almacenamiento de traces va directamente a Langfuse
-vía API REST (`/api/public/ingestion`). La deduplicación la gestiona Langfuse por `id` de trace
-(upsert idempotente, I-2). El índice es responsabilidad del stack Langfuse, no de este repo.
-
-Si en el futuro se añade una BD local de audit (e.g., SQLite para caché offline o estadísticas
-locales), revisar este ítem.
-
-### Audit table partitioning — NO APLICA (2026-04-24)
-
-El item #6 del backlog referería a particionado diario/mensual de una tabla de audit
-de hooks. **Este proyecto no tiene tabla de audit local.** Los hooks emiten directamente
-a Langfuse y no persisten nada localmente (excepto `~/.atlax-ai/tier.json`, que es un
-fichero JSON simple, no una tabla relacional).
-
-El particionado aplica al stack Langfuse v3:
-
-- **Postgres**: almacena traces/observations metadata. Langfuse 3.x gestiona su propio
-  schema — si el volumen crece, el equipo de Langfuse publicará migraciones de particionado.
-- **ClickHouse**: ya particiona por defecto (es su modelo nativo de engines MergeTree). No
-  necesita intervención.
-
-Si en el futuro se añade una tabla de audit local (improbable — el valor de observabilidad
-lo proporciona Langfuse), revisar este ítem.
+El test `tests/sdd-invariants.test.ts` verifica que cada I-N tiene cobertura
+en `ARCHITECTURE.md`. El test `tests/sdd-links.test.ts` verifica que los paths
+de código referenciados en el SDD existen en disco.
