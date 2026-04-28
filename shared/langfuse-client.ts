@@ -11,7 +11,7 @@ export interface LangfuseConfig {
   host: string;
   publicKey: string;
   secretKey: string;
-  timeoutMs?: number;
+  timeoutMs: number;
 }
 
 export interface LangfuseTrace {
@@ -110,7 +110,7 @@ async function request<T>(
       "Content-Type": "application/json",
       ...(init.headers ?? {}),
     },
-    signal: AbortSignal.timeout(cfg.timeoutMs!),
+    signal: AbortSignal.timeout(cfg.timeoutMs),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");

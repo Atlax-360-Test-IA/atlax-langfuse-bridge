@@ -1,10 +1,10 @@
 /**
- * Unit tests for validate-traces.ts — focuses on the exported classifyDrift
- * function. main() requires Langfuse credentials and is excluded from CI.
+ * Unit tests for classifyDrift — I-11: single source of truth in shared/drift.ts.
+ * main() in validate-traces.ts requires Langfuse credentials and is excluded from CI.
  */
 
 import { describe, expect, test } from "bun:test";
-import { classifyDrift, type DriftStatus } from "./validate-traces";
+import { classifyDrift, type DriftStatus } from "../shared/drift";
 
 // ─── classifyDrift ────────────────────────────────────────────────────────────
 

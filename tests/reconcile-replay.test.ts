@@ -118,7 +118,13 @@ async function runReconciler(extraEnv: Record<string, string> = {}): Promise<{
     cwd: join(import.meta.dir, ".."),
   });
 
-  await proc.exited;
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(
+      () => reject(new Error("runReconciler timed out after 30s")),
+      30_000,
+    ),
+  );
+  await Promise.race([proc.exited, timeout]);
   const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
   return { exitCode: proc.exitCode ?? -1, stdout, stderr };

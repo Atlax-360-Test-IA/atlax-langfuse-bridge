@@ -198,14 +198,68 @@ spec:
               port: 3030
             periodSeconds: 30
             failureThreshold: 3
-          # Same env block as langfuse-web — omitted here for brevity.
-          # In real deploy, copy the env list from langfuse-web above.
           env:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: langfuse-database-url
                   key: latest
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-redis-host
+                  key: latest
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-redis-auth
+                  key: latest
+            - name: CLICKHOUSE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-clickhouse-url
+                  key: latest
+            - name: CLICKHOUSE_USER
+              value: default
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-clickhouse-password
+                  key: latest
+            - name: LANGFUSE_S3_EVENT_UPLOAD_BUCKET
+              value: atlax-langfuse-events
+            - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
+              value: europe-west1
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT
+              value: https://storage.googleapis.com
+            - name: LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE
+              value: "true"
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-gcs-hmac-id
+                  key: latest
+            - name: LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-gcs-hmac-secret
+                  key: latest
+            - name: SALT
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-salt
+                  key: latest
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-encryption-key
+                  key: latest
+            - name: TELEMETRY_ENABLED
+              value: "false"
+            - name: CLICKHOUSE_CLUSTER_ENABLED
+              value: "false"
   traffic:
     - percent: 100
       latestRevision: true
