@@ -71,11 +71,13 @@ El motivo: el archivo contiene tokens de sesión Anthropic. `account` queda
 
 ### I-9 · Generación IDs deterministas — usar timestamp del turn, no Date.now()
 
-Los IDs de generation en el batch Langfuse deben ser deterministas para
-que el reconciler sea idempotente. Usar `turn.timestamp` (del JSONL), nunca
-`Date.now()` ni `new Date().toISOString()` en el cuerpo del evento de
-generación. `Date.now()` produce un ID diferente en cada re-ejecución,
-rompiendo la deduplicación de Langfuse.
+**Aplica si el bridge genera IDs para events/observations de Langfuse.**
+Actualmente el bridge no genera esos IDs (vienen del LLM upstream via JSONL).
+Esta regla es un guard para código futuro que sí los genere.
+
+Si se añade generación de IDs propios: usar `turn.timestamp` (del JSONL), nunca
+`Date.now()` ni `new Date().toISOString()`. `Date.now()` produce un ID diferente
+en cada re-ejecución, rompiendo la deduplicación por `id` en Langfuse (I-2).
 
 ### I-10 · MCP_AGENT_TYPE validado contra allowlist
 

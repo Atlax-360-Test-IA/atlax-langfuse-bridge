@@ -7,10 +7,12 @@ const ENV_KEYS = [
   "ANTHROPIC_API_KEY",
 ] as const;
 
-describe("detectTier", () => {
+// I-7: tier written deterministically to ~/.atlax-ai/tier.json by detect-tier.ts
+// I-12: process.env restore uses per-key save/restore, never bulk assignment
+describe("detectTier (I-7, I-12)", () => {
   const saved: Partial<Record<(typeof ENV_KEYS)[number], string>> = {};
 
-  // Save only the specific keys we mutate — avoids process.env = {...} anti-pattern
+  // I-12: save only specific keys we mutate — avoids process.env = {...} anti-pattern
   for (const k of ENV_KEYS) {
     if (process.env[k] !== undefined) saved[k] = process.env[k];
   }

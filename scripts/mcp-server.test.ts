@@ -38,9 +38,9 @@ describe("initialize", () => {
   });
 });
 
-// ─── tools/list ─────────────────────────────────────────────────────────────
+// ─── tools/list — I-10: MCP_AGENT_TYPE validated against allowlist ────────────
 
-describe("tools/list", () => {
+describe("tools/list (I-10)", () => {
   test("returns tools authorized for default agent (coordinator)", async () => {
     await dispatch({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     const res = lastResponse();

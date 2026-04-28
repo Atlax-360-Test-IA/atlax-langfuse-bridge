@@ -20,7 +20,7 @@ const remote = (
   sessionEnd: string | null = "2026-04-26T10:00:00.000Z",
 ) => ({ metadata: { turns, estimatedCostUSD, sessionEnd } });
 
-describe("classifyDrift (validate-traces)", () => {
+describe("classifyDrift — I-11: source is shared/drift.ts", () => {
   test("OK when turns, cost, and end all match", () => {
     expect(classifyDrift(local(3, 0.03), remote(3, 0.03))).toBe("OK");
   });

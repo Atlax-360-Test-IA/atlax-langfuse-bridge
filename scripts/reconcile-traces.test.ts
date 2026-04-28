@@ -24,7 +24,7 @@ const remote = (
   metadata: { turns, estimatedCostUSD, sessionEnd },
 });
 
-describe("classifyDrift", () => {
+describe("classifyDrift — I-11: source is shared/drift.ts", () => {
   test("OK when all fields match", () => {
     expect(classifyDrift(local(5, 0.05), remote(5, 0.05))).toBe("OK");
   });

@@ -49,7 +49,11 @@ atlax-langfuse-bridge/
 │   ├── model-pricing.ts         # Fuente única pricing (I-6)
 │   ├── aggregate.ts             # Agrega JSONL → ModelUsage
 │   ├── degradation.ts           # emitDegradation → stderr JSON
+│   ├── drift.ts                 # classifyDrift + DriftStatus (I-11)
+│   ├── constants.ts             # COST_EPSILON y constantes compartidas
+│   ├── env-loader.ts            # Carga .atlax-ai/reconcile.env en proceso
 │   ├── hash-cache.ts            # Cache SHA256 con TTL
+│   ├── jsonl-discovery.ts       # Descubre JSONLs recientes en ~/.claude/
 │   ├── langfuse-client.ts       # Cliente REST Langfuse (getTrace, etc.)
 │   ├── processing-tiers.ts      # Taxonomía deterministic/cached_llm/full_llm
 │   └── tools/

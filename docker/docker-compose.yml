@@ -18,7 +18,7 @@ services:
       minio:
         condition: service_started
       langfuse-worker:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "3000:3000"
     healthcheck:
@@ -90,6 +90,13 @@ services:
         limits:
           cpus: "2.0"
           memory: 2G
+    healthcheck:
+      test:
+        ["CMD-SHELL", "wget -qO- http://127.0.0.1:3030/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     depends_on:
       postgres:
         condition: service_healthy

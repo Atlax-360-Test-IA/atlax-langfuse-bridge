@@ -171,10 +171,7 @@ async function main() {
   let failed = 0;
 
   for (const p of paths) {
-    const sid = p
-      .split("/")
-      .pop()!
-      .replace(/\.jsonl$/, "");
+    const sid = (p.split("/").pop() ?? "").replace(/\.jsonl$/, "");
 
     // C4: reject filenames that don't match the expected UUID-like pattern.
     // A malformed filename (e.g. "../secret") could propagate as a trace ID
