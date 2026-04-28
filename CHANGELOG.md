@@ -26,11 +26,16 @@ Semver retroactivo. Política:
   - `docs/adr/README.md` + 7 ADRs (header Nygard completo, contenido mínimo)
   - `docs/operations/runbook.md` (placeholder)
   - Campo `version: "0.5.4"`, `description`, `keywords`, `repository` en `package.json`
-- **Fase B** (este PR — `docs/sdd-content-migration`):
+- **Fase B** (PR #33 — `docs/sdd-content-migration`):
   - `ARCHITECTURE.md` completado con contenido migrado de README + CLAUDE.md
   - `docs/operations/runbook.md` completado (validar, reconcile, cron, LiteLLM, browser ext, rollback)
-  - `README.md` refactorizado a Quick Start + setup (~280 líneas, era 603)
-  - `CLAUDE.md` refactorizado preservando I-1..I-13 (~150 líneas, era 221)
+  - `README.md` refactorizado a Quick Start + setup (~306 líneas, era 603)
+  - `CLAUDE.md` refactorizado preservando I-1..I-13 (~182 líneas, era 221)
+- **Fase C** (este PR — `docs/adr-retroactive-content`):
+  - 7 ADRs completos con Context/Decision/Consequences detallado retroactivo
+  - Cada ADR incluye alternativas descartadas con razones técnicas
+  - Referencias cruzadas explícitas entre ADRs (Related: ADR-NNN)
+  - Sección "References" con paths a tests y PRs en cada ADR
 
 ### Changed
 
