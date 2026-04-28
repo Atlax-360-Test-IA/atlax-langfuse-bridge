@@ -23,6 +23,7 @@ Semver retroactivo. Política:
 - `ARCHITECTURE.md §11`: sección "Incidente 22-Apr-2026" con cronología, datos perdidos/recuperados, y mitigaciones
 - `hooks/pre-tool-use-guard.sh`: PreToolUse guard que bloquea `docker compose down -v`, `docker volume rm/prune`, `rm -rf` sobre directorios de datos protegidos, y `dropdb/DROP DATABASE langfuse` — activo en `~/.claude/settings.json`
 - `tests/pre-tool-use-guard.test.ts`: 21 tests (8 permitidos + 13 bloqueados)
+- `docs/operations/runbook.md §Incidentes`: plantilla de incidente + INC-001 (23-Apr-2026, cronología completa, mitigaciones, gap pendiente)
 
 ### Changed
 
