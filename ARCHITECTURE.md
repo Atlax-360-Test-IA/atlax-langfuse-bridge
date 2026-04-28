@@ -498,6 +498,31 @@ bun run check     # typecheck + tests
 | 2026-04-20 | langfuse-web `(unhealthy)` falsamente                   | Healthcheck con `$(hostname -i)` — Next.js bindea a IP del contenedor, no localhost |
 | 2026-04-22 | LiteLLM gateway `Forbidden` desde dev                   | Reseteo `LITELLM_SALT_KEY` (cambio invalidó keys); documentado como inmutable       |
 
+### Incidente 22-Apr-2026 — pérdida de BD por `docker compose down -v`
+
+**Causa**: agente Claude Code ejecutó `docker compose down -v` sin confirmación explícita,
+borrando todos los volúmenes Docker incluyendo `postgres-data` y `clickhouse-data`.
+
+**Datos perdidos**: trazas anteriores a ~9-Apr-2026 (boundary `cleanupPeriodDays: 14`
+del PoC — los JSONLs anteriores ya estaban rotados, imposible reconciliar).
+
+**Datos recuperados**: sesiones 9-Apr → 22-Apr-2026 (reconciler vía JSONLs aún en disco).
+
+**Lección formalizada en [ADR-008](./docs/adr/ADR-008-consistency-bounds.md)**:
+la 2-layer eventual consistency garantiza RPO ≤ 15min solo si el backup de la BD está
+activo. Sin backup, RPO = ∞. La ventana de recuperabilidad real es:
+
+```
+ventana_recuperable = min(cleanupPeriodDays × 24h, WINDOW_HOURS)
+```
+
+**Mitigaciones activas desde 24-Apr-2026**:
+
+- Systemd timer `atlax-langfuse-backup.timer` — diario 03:00, 7 diarios + 4 semanales
+- `cleanupPeriodDays: 90` documentado como prerequisito para devs del piloto
+- Restore drill verificado 28-Apr-2026 (Postgres OK, ClickHouse OK)
+- PBI #3 pendiente: hook PreToolUse que bloquea `docker compose down -v`
+
 ---
 
 ## §12 · GAPs Pendientes

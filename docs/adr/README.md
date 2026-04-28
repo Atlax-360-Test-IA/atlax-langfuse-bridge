@@ -6,15 +6,16 @@ Formato: [Michael Nygard](https://github.com/joelparkerhenderson/architecture-de
 
 ## Índice
 
-| ID                                            | Título                                  | Status   | Implementa | Date       |
-| --------------------------------------------- | --------------------------------------- | -------- | ---------- | ---------- |
-| [ADR-001](./ADR-001-bun-cero-deps.md)         | Bun runtime con cero deps prod          | Accepted | I-6        | 2026-04-01 |
-| [ADR-002](./ADR-002-edge-core-split.md)       | Topología edge/core (I-13)              | Accepted | I-13       | 2026-04-26 |
-| [ADR-003](./ADR-003-langfuse-idempotent.md)   | Langfuse upsert idempotente por traceId | Accepted | I-2, I-4   | 2026-04-01 |
-| [ADR-004](./ADR-004-tier-system.md)           | Tier determinista vs billing heurístico | Accepted | I-7, I-8   | 2026-04-10 |
-| [ADR-005](./ADR-005-mcp-stdio-no-sdk.md)      | MCP stdio sin SDK, JSON-RPC 2.0 a mano  | Accepted | I-10       | 2026-04-12 |
-| [ADR-006](./ADR-006-two-layer-consistency.md) | Eventual consistency 2 capas            | Accepted | I-1, I-5   | 2026-04-01 |
-| [ADR-007](./ADR-007-litellm-optin.md)         | LiteLLM como gateway opt-in             | Accepted | —          | 2026-04-06 |
+| ID                                            | Título                                        | Status   | Implementa | Date       |
+| --------------------------------------------- | --------------------------------------------- | -------- | ---------- | ---------- |
+| [ADR-001](./ADR-001-bun-cero-deps.md)         | Bun runtime con cero deps prod                | Accepted | I-6        | 2026-04-01 |
+| [ADR-002](./ADR-002-edge-core-split.md)       | Topología edge/core (I-13)                    | Accepted | I-13       | 2026-04-26 |
+| [ADR-003](./ADR-003-langfuse-idempotent.md)   | Langfuse upsert idempotente por traceId       | Accepted | I-2, I-4   | 2026-04-01 |
+| [ADR-004](./ADR-004-tier-system.md)           | Tier determinista vs billing heurístico       | Accepted | I-7, I-8   | 2026-04-10 |
+| [ADR-005](./ADR-005-mcp-stdio-no-sdk.md)      | MCP stdio sin SDK, JSON-RPC 2.0 a mano        | Accepted | I-10       | 2026-04-12 |
+| [ADR-006](./ADR-006-two-layer-consistency.md) | Eventual consistency 2 capas                  | Accepted | I-1, I-5   | 2026-04-01 |
+| [ADR-007](./ADR-007-litellm-optin.md)         | LiteLLM como gateway opt-in                   | Accepted | —          | 2026-04-06 |
+| [ADR-008](./ADR-008-consistency-bounds.md)    | Límites de recuperabilidad — incidente 22-Apr | Accepted | I-1, I-5   | 2026-04-28 |
 
 ## Convención de formato
 
