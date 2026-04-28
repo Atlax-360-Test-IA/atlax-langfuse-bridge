@@ -19,8 +19,10 @@ Semver retroactivo. Política:
 
 ### Added
 
-- **ADR-008** (`docs/adr/ADR-008-consistency-bounds.md`): formaliza límites de recuperabilidad de la 2-layer eventual consistency; documenta incidente 22-Apr-2026 (`docker compose down -v`), lección `min(cleanupPeriodDays, WINDOW_HOURS)`, mitigaciones activas
+- **ADR-008** (`docs/adr/ADR-008-consistency-bounds.md`): formaliza límites de recuperabilidad de la 2-layer eventual consistency; documenta incidente 22-Apr-2026 (`docker compose down -v`), lección `min(cleanupPeriodDays, WINDOW_HOURS)`, mitigaciones activas (PR #38)
 - `ARCHITECTURE.md §11`: sección "Incidente 22-Apr-2026" con cronología, datos perdidos/recuperados, y mitigaciones
+- `hooks/pre-tool-use-guard.sh`: PreToolUse guard que bloquea `docker compose down -v`, `docker volume rm/prune`, `rm -rf` sobre directorios de datos protegidos, y `dropdb/DROP DATABASE langfuse` — activo en `~/.claude/settings.json`
+- `tests/pre-tool-use-guard.test.ts`: 21 tests (8 permitidos + 13 bloqueados)
 
 ### Changed
 
