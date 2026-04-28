@@ -19,6 +19,30 @@ Semver retroactivo. Política:
 
 ### Added
 
+- **ADR-008** (`docs/adr/ADR-008-consistency-bounds.md`): formaliza límites de recuperabilidad de la 2-layer eventual consistency; documenta incidente 22-Apr-2026 (`docker compose down -v`), lección `min(cleanupPeriodDays, WINDOW_HOURS)`, mitigaciones activas
+- `ARCHITECTURE.md §11`: sección "Incidente 22-Apr-2026" con cronología, datos perdidos/recuperados, y mitigaciones
+
+### Changed
+
+- Langfuse stack actualizado de 3.167.4 → 3.171.0 (security fixes v3.168, v3.170; catálogo modelos actualizado con claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5) (PR #37)
+- Imágenes Docker pineadas a versión exacta `:3.171.0` (antes tag flotante `:3`)
+- Worker healthcheck: `127.0.0.1` → `$$(hostname -i)` — el worker no escucha en loopback
+- Eliminados `user:` forzados en postgres y minio que causaban conflictos con UIDs de volúmenes existentes
+
+### ADR
+
+- ADR-008 documentando límites de recuperabilidad y lecciones del incidente 22-Apr-2026
+
+### Metrics
+
+- Tests: 523 / expects: 898 / files: 37 (sin cambios funcionales)
+
+---
+
+## [0.6.0-wip] — SDD canónico
+
+### Added
+
 - **Fase A** (PR #32 — `docs/sdd-canonical-structure`):
   - `ARCHITECTURE.md` con scaffolding SDD canónico §1-§14 + Apéndice A (placeholders)
   - `ORGANIZATION.md` con convenciones del ecosistema Atlax
