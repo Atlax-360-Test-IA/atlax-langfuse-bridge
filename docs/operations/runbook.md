@@ -367,3 +367,84 @@ bash setup/setup.sh
   `pg_dump` + `clickhouse-backup` → `~/atlax-backups/`
 - **Rotación de logs**: journalctl gestiona automático (configurable en `journald.conf`)
 - **Monitoreo de espacio docker**: `docker system df` mensual; `docker system prune` si crece
+
+---
+
+## Incidentes
+
+### Plantilla de entrada
+
+```
+### INC-NNN · <Título breve> — <Fecha>
+
+**Severidad**: Crítica / Alta / Media / Baja
+**Estado**: Resuelto / En curso
+**Duración**: HH:MM (detección → resolución)
+**Datos perdidos**: Sí (descripción) / No
+**Impacto**: N usuarios / N sesiones afectadas
+
+**Cronología**:
+- HH:MM — evento inicial
+- HH:MM — detección
+- HH:MM — diagnóstico
+- HH:MM — mitigación aplicada
+- HH:MM — resolución confirmada
+
+**Causa raíz**: <descripción técnica concisa>
+
+**Datos irrecuperables**: <descripción o "ninguno">
+
+**Mitigaciones aplicadas**:
+- Mitigación 1 (fecha)
+- Mitigación 2 (fecha)
+
+**ADR relacionado**: [ADR-NNN](../adr/ADR-NNN-*.md) si aplica
+```
+
+---
+
+### INC-001 · Pérdida de BD Langfuse por `docker compose down -v` — 23-Apr-2026
+
+**Severidad**: Crítica
+**Estado**: Resuelto
+**Duración**: ~2h (detección → stack restaurado con datos parciales)
+**Datos perdidos**: Sí — trazas anteriores a ~9-Apr-2026 irrecuperables
+**Impacto**: 1 usuario (jgcalvo@atlax360.com), ~84 trazas previas al incidente
+
+**Cronología**:
+
+- 23-Apr-2026 ~11:00 — agente Claude Code ejecuta `docker compose down -v` sin
+  confirmación explícita del usuario durante una sesión de mantenimiento del stack
+- 23-Apr-2026 ~11:05 — usuario detecta que Langfuse web retorna 500 (BD inexistente)
+- 23-Apr-2026 ~11:20 — diagnóstico: volumen `postgres-data` destruido; `docker
+volume ls` no muestra volúmenes del proyecto
+- 23-Apr-2026 ~11:30 — intento de recuperación: JSONLs en `~/.claude/projects/`
+  están intactos pero `cleanupPeriodDays: 14` en settings.json de Claude Code
+  implica que sesiones anteriores a ~9-Apr-2026 ya fueron rotadas
+- 23-Apr-2026 ~13:00 — stack Langfuse restaurado con `docker compose up -d`; BD
+  vacía; reconciler re-sincroniza sesiones de los últimos 14 días
+- 24-Apr-2026 — systemd timer de backup configurado y verificado
+
+**Causa raíz**: el agente interpretó "limpiar el stack" como destrucción completa
+incluyendo datos. No existía guard técnico que bloqueara `docker compose down -v`
+ni backup automático previo.
+
+**Datos irrecuperables**: trazas de jgcalvo@atlax360.com desde el inicio del proyecto
+(~1-Apr-2026) hasta ~9-Apr-2026 — aproximadamente 3 semanas de historial FinOps.
+
+**Mitigaciones aplicadas**:
+
+- Backup sistemático diario desde 24-Apr-2026: `scripts/backup-langfuse.sh` vía
+  systemd timer `atlax-langfuse-backup.timer` (03:00h, 7 diarios + 4 semanales).
+  Restore drill verificado 28-Apr-2026.
+- `cleanupPeriodDays: 90` documentado como prerequisito para todos los devs del
+  piloto (aumenta la ventana de recuperación vía reconciler).
+- Hook `hooks/pre-tool-use-guard.sh` registrado en PreToolUse (PR #39) — bloquea
+  `docker compose down -v`, `docker volume rm/prune`, y otros patrones destructivos.
+- ADR-008 creado formalizando los límites de recuperabilidad de la 2-layer
+  eventual consistency.
+
+**Gap pendiente**: backup sigue siendo local (mismo host que los datos). GAP-P02 en
+`ARCHITECTURE.md §12` — resuelto estructuralmente en PRO con Cloud SQL PITR.
+
+**ADR relacionado**: [ADR-008](../adr/ADR-008-consistency-bounds.md)
