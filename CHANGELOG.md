@@ -24,6 +24,7 @@ Semver retroactivo. Política:
 - `hooks/pre-tool-use-guard.sh`: PreToolUse guard que bloquea `docker compose down -v`, `docker volume rm/prune`, `rm -rf` sobre directorios de datos protegidos, y `dropdb/DROP DATABASE langfuse` — activo en `~/.claude/settings.json`
 - `tests/pre-tool-use-guard.test.ts`: 21 tests (8 permitidos + 13 bloqueados)
 - `docs/operations/runbook.md §Incidentes`: plantilla de incidente + INC-001 (23-Apr-2026, cronología completa, mitigaciones, gap pendiente)
+- `setup/pilot-onboarding.sh`: script standalone de onboarding para los 37 devs del piloto — descarga hook + shared/ desde GitHub sin clonar el repo, registra hook Stop en settings.json, escribe credenciales en `~/.atlax-ai/reconcile.env` (modo 600), establece `cleanupPeriodDays: 90`. Uso: `curl -fsSL <url> | bash -s -- <HOST> <PK> <SK>`
 
 ### Changed
 
