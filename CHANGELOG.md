@@ -25,6 +25,7 @@ Semver retroactivo. Política:
 - `tests/pre-tool-use-guard.test.ts`: 21 tests (8 permitidos + 13 bloqueados)
 - `docs/operations/runbook.md §Incidentes`: plantilla de incidente + INC-001 (23-Apr-2026, cronología completa, mitigaciones, gap pendiente)
 - `setup/pilot-onboarding.sh`: script standalone de onboarding para los 37 devs del piloto — descarga hook + shared/ desde GitHub sin clonar el repo, registra hook Stop en settings.json, escribe credenciales en `~/.atlax-ai/reconcile.env` (modo 600), establece `cleanupPeriodDays: 90`. Uso: `curl -fsSL <url> | bash -s -- <HOST> <PK> <SK>`
+- `tests/sprint16-coverage.test.ts`: 37 tests cubriendo gaps de cobertura — `readTierFile` (vía subprocess con HOME falso), `getBillingTier` (vertex/priority/standard), `getDevIdentity` (overrides), `detectOS`, error paths de `sendToLangfuse` (unsafe host, missing keys, HTTP 4xx), `langfuse-client` (buildConfig unsafe host, credentials missing, 404/500, listTraces params), `hash-cache` (TTL, FIFO, cacheSize), reconciler (`EXCLUDE_SESSION`, invalid SID skip, missing keys exit-1)
 
 ### Changed
 
