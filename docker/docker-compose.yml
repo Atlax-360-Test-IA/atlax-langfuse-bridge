@@ -29,8 +29,8 @@ services:
         ]
       interval: 30s
       timeout: 5s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 90s
     env_file:
       - .env
     environment:
@@ -159,10 +159,15 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-langfuse}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-langfuse} && psql -U ${POSTGRES_USER:-langfuse} -d ${POSTGRES_DB:-langfuse} -c 'SELECT 1' -q --no-align -t 2>/dev/null | grep -q 1",
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.12-alpine
