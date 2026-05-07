@@ -190,6 +190,44 @@ journalctl --user -u atlax-langfuse-reconcile.service -n 200 \
 
 > El gateway es **opt-in**. Requiere `docker compose --profile litellm up -d`.
 
+### Activar LiteLLM M1 (primera vez)
+
+M1 = gateway operativo con master key única. Sin virtual keys aún (M3) ni
+callback Langfuse activo (M2 — ya configurado en `config.yaml` pero pendiente
+de validar con LANGFUSE*INIT_PROJECT*\*\_KEY rellenas).
+
+```bash
+cd docker
+
+# 1. Generar secretos (ejecutar una vez, guardar en .env)
+echo "LITELLM_MASTER_KEY=sk-$(openssl rand -hex 32)"   # → .env
+echo "LITELLM_SALT_KEY=$(openssl rand -hex 32)"         # → .env
+# ANTHROPIC_API_KEY ya debe estar en .env (cuenta corporativa Atlax360)
+
+# 2. Arrancar con perfil litellm
+docker compose --profile litellm up -d litellm
+
+# 3. Verificar health (esperar ~15s en primer arranque — BD init)
+curl http://localhost:4001/health/liveliness
+# Esperado: "I'm alive!"
+
+# 4. Smoke test M1
+LITELLM_MASTER_KEY=$(grep LITELLM_MASTER_KEY .env | cut -d= -f2) \
+  bun test tests/litellm-m1-smoke.test.ts
+# Esperado: 5 pass, 0 fail
+```
+
+**Variables requeridas en `docker/.env`:**
+
+| Variable             | Descripción                              | Cómo generar                      |
+| -------------------- | ---------------------------------------- | --------------------------------- |
+| `ANTHROPIC_API_KEY`  | Clave API corporativa Atlax360           | Panel Anthropic → API Keys        |
+| `LITELLM_MASTER_KEY` | Gate admin UI + virtual keys (M3)        | `echo sk-$(openssl rand -hex 32)` |
+| `LITELLM_SALT_KEY`   | Cifra virtual keys en BD — **inmutable** | `openssl rand -hex 32`            |
+
+> ⚠️ `LITELLM_SALT_KEY` nunca se rota tras emitir virtual keys. Cambiarla invalida
+> todas las keys existentes en la BD.
+
 ### Arrancar gateway
 
 ```bash
