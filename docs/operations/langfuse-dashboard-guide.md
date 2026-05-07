@@ -9,7 +9,7 @@
 
 | Nombre del trace      | Origen                  | Frecuencia      | Descripción                                          |
 | --------------------- | ----------------------- | --------------- | ---------------------------------------------------- |
-| `langfuse-sync`       | Hook Stop (dev)         | Por sesión      | Uso real de Claude Code — tokens, coste, proyecto    |
+| `claude-code-session` | Hook Stop (dev)         | Por sesión      | Uso real de Claude Code — tokens, coste, proyecto    |
 | `litellm-acompletion` | LiteLLM callback        | Por llamada API | Llamadas vía gateway — coste, modelo, virtual key    |
 | `bridge-health`       | Reconciler (cron 15min) | Una vez al día  | Salud del bridge — drift, reparaciones, degradations |
 
