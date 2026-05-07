@@ -6,8 +6,8 @@
 > [`docs/operations/runbook.md`](./docs/operations/runbook.md). Para decisiones
 > formales, ver [`docs/adr/`](./docs/adr/).
 
-**Versión actual**: v0.5.4
-**Última actualización**: 2026-04-27
+**Versión actual**: v0.5.5
+**Última actualización**: 2026-05-07
 **Estado**: Production-ready PoC (Langfuse v3 self-hosted local)
 
 ---
@@ -159,7 +159,7 @@ atlax-langfuse-bridge/
 │   └── backup-story.md               # Cloud SQL PITR + ClickHouse + GCS
 │
 ├── docs/
-│   ├── adr/                          # 7 ADRs Michael Nygard
+│   ├── adr/                          # 9 ADRs Michael Nygard (ADR-001..ADR-009, ADR-011)
 │   ├── operations/runbook.md         # Runbook operativo
 │   └── systemd/                      # User units Linux/WSL del reconciler
 │
@@ -171,7 +171,7 @@ atlax-langfuse-bridge/
 ├── CHANGELOG.md                      # Semver retroactivo
 ├── ORGANIZATION.md                   # Convenciones Atlax
 ├── README.md                         # Quick Start + setup
-└── CLAUDE.md                         # Invariantes I-1..I-13 (instrucciones Claude Code)
+└── CLAUDE.md                         # Invariantes I-1..I-14 (instrucciones Claude Code)
 ```
 
 ### Tabla de módulos `shared/` con invariante implementado
@@ -420,7 +420,7 @@ Ver `infra/backup-story.md` para detalle de backup story (RPO ≤ 1 min).
 
 ## §10 · Testing
 
-**Estado actual**: 466 tests / 814 expects / 35 ficheros / 0 fallos.
+**Estado actual**: 651 tests / 1217 expects / 42 ficheros / 0 fallos.
 
 ### Pirámide de tests
 
@@ -433,21 +433,22 @@ Ver `infra/backup-story.md` para detalle de backup story (RPO ≤ 1 min).
 
 ### Mapeo invariante → fichero de test
 
-| Invariante | Cobertura principal                                                                                |
-| ---------- | -------------------------------------------------------------------------------------------------- |
-| **I-1**    | `tests/langfuse-sync-http.test.ts` (hook nunca exit ≠ 0)                                           |
-| **I-2**    | `tests/e2e-pipeline.test.ts:121` (`trace body.timestamp matches envelope (I-2)`)                   |
-| **I-3**    | `tests/e2e-pipeline.test.ts:228+` (`E2E edge cases (I-3: cwd from first entry)`)                   |
-| **I-4**    | Comentario en `shared/aggregate.ts:46` (allowlist de tags)                                         |
-| **I-5**    | `tests/reconcile-replay.test.ts:135` (`reconcile-traces — dry run scan (I-5)`)                     |
-| **I-6**    | `tests/extension-pricing.test.ts:15` (`extension pricing.js ↔ shared/model-pricing.ts sync (I-6)`) |
-| **I-7**    | `scripts/detect-tier.test.ts:10` (`detectTier (I-7, I-12)`)                                        |
-| **I-8**    | `scripts/detect-tier.test.ts:72` (`I-8: OAuth tier never reads credentials content`)               |
-| **I-9**    | (Documental — el bridge no genera IDs propios actualmente)                                         |
-| **I-10**   | `scripts/mcp-server.test.ts:43` (`tools/list (I-10)`)                                              |
-| **I-11**   | `shared/drift.test.ts` + `scripts/{validate,reconcile}-traces.test.ts`                             |
-| **I-12**   | `tests/cross-validation.test.ts:90` (`tier detection consistency (I-12)`)                          |
-| **I-13**   | `tests/cloud-run-boundary.test.ts` (17 tests, ADR ejecutable)                                      |
+| Invariante | Cobertura principal                                                                                                         |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **I-1**    | `tests/langfuse-sync-http.test.ts` (hook nunca exit ≠ 0)                                                                    |
+| **I-2**    | `tests/e2e-pipeline.test.ts:121` (`trace body.timestamp matches envelope (I-2)`)                                            |
+| **I-3**    | `tests/e2e-pipeline.test.ts:228+` (`E2E edge cases (I-3: cwd from first entry)`)                                            |
+| **I-4**    | Comentario en `shared/aggregate.ts:46` (allowlist de tags)                                                                  |
+| **I-5**    | `tests/reconcile-replay.test.ts:135` (`reconcile-traces — dry run scan (I-5)`)                                              |
+| **I-6**    | `tests/extension-pricing.test.ts:15` (`extension pricing.js ↔ shared/model-pricing.ts sync (I-6)`)                          |
+| **I-7**    | `scripts/detect-tier.test.ts:10` (`detectTier (I-7, I-12)`)                                                                 |
+| **I-8**    | `scripts/detect-tier.test.ts:72` (`I-8: OAuth tier never reads credentials content`)                                        |
+| **I-9**    | (Documental — el bridge no genera IDs propios actualmente)                                                                  |
+| **I-10**   | `scripts/mcp-server.test.ts:43` (`tools/list (I-10)`)                                                                       |
+| **I-11**   | `shared/drift.test.ts` + `scripts/{validate,reconcile}-traces.test.ts`                                                      |
+| **I-12**   | `tests/cross-validation.test.ts:90` (`tier detection consistency (I-12)`)                                                   |
+| **I-13**   | `tests/cloud-run-boundary.test.ts` (17 tests, ADR ejecutable)                                                               |
+| **I-14**   | `docs/experiments/2026-05-07-parallel-subagent-experiment.md` + `docs/adr/ADR-011-parallel-subagent-limits.md` (documental) |
 
 ### Comandos
 
@@ -634,21 +635,28 @@ con throttle automático.
 
 Verdades no-negociables del sistema:
 
-| Afirmación                                                | Invariante | ADR     |
-| --------------------------------------------------------- | ---------- | ------- |
-| El hook nunca bloquea Claude Code (siempre `exit 0`)      | I-1        | ADR-006 |
-| `traceId = cc-${session_id}` con upsert idempotente       | I-2        | ADR-003 |
-| `cwd` se extrae del primer JSONL entry, no del Stop event | I-3        | —       |
-| Tags Langfuse son UNION en upsert (no replacement)        | I-4        | ADR-003 |
-| Ventana reconciler ≥ 24h por defecto, cap 8760h           | I-5        | ADR-006 |
-| `MODEL_PRICING` única fuente de verdad de pricing         | I-6        | ADR-001 |
-| Tier determinista en `~/.atlax-ai/tier.json`              | I-7        | ADR-004 |
-| Nunca parsear `.credentials.json` — solo existencia       | I-8        | ADR-004 |
-| IDs de generation deterministas (timestamp del turn)      | I-9        | ADR-003 |
-| `MCP_AGENT_TYPE` validado contra allowlist                | I-10       | ADR-005 |
-| `classifyDrift` única fuente en `shared/drift.ts`         | I-11       | —       |
-| Restauración `process.env` per-key en tests               | I-12       | —       |
-| Reconciler/hook/discovery NUNCA migran a Cloud Run        | I-13       | ADR-002 |
+| Afirmación                                                              | Invariante | ADR     |
+| ----------------------------------------------------------------------- | ---------- | ------- |
+| El hook nunca bloquea Claude Code (siempre `exit 0`)                    | I-1        | ADR-006 |
+| `traceId = cc-${session_id}` con upsert idempotente                     | I-2        | ADR-003 |
+| `cwd` se extrae del primer JSONL entry, no del Stop event               | I-3        | —       |
+| Tags Langfuse son UNION en upsert (no replacement)                      | I-4        | ADR-003 |
+| Ventana reconciler ≥ 24h por defecto, cap 8760h                         | I-5        | ADR-006 |
+| `MODEL_PRICING` única fuente de verdad de pricing                       | I-6        | ADR-001 |
+| Tier determinista en `~/.atlax-ai/tier.json`                            | I-7        | ADR-004 |
+| Nunca parsear `.credentials.json` — solo existencia                     | I-8        | ADR-004 |
+| IDs de generation deterministas (timestamp del turn)                    | I-9        | ADR-003 |
+| `MCP_AGENT_TYPE` validado contra allowlist                              | I-10       | ADR-005 |
+| `classifyDrift` única fuente en `shared/drift.ts`                       | I-11       | —       |
+| Restauración `process.env` per-key en tests                             | I-12       | —       |
+| Reconciler/hook/discovery NUNCA migran a Cloud Run                      | I-13       | ADR-002 |
+| Paralelismo agéntico: N≤5 read-only, N≤3 write, doble-check obligatorio | I-14       | ADR-011 |
+
+**Límites estructurales externos documentados:**
+
+| Afirmación                                                      | ADR     |
+| --------------------------------------------------------------- | ------- |
+| Quota seats Anthropic Premium no consultable vía API (post-hoc) | ADR-009 |
 
 ---
 

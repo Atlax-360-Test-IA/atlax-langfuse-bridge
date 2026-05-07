@@ -1,5 +1,5 @@
 /**
- * Fase D — enforcement: ARCHITECTURE.md menciona todos los invariantes I-1..I-13.
+ * Fase D — enforcement: ARCHITECTURE.md menciona todos los invariantes I-1..I-14.
  * Si el SDD pierde cobertura de un invariante, este test falla antes de mergear.
  */
 import { describe, it, expect, beforeAll } from "bun:test";
@@ -23,6 +23,7 @@ const INVARIANTS: Array<{ id: string; keywords: string[] }> = [
   { id: "I-11", keywords: ["classifyDrift", "shared/drift.ts"] },
   { id: "I-12", keywords: ["process.env", "per-key"] },
   { id: "I-13", keywords: ["Cloud Run", "reconciler"] },
+  { id: "I-14", keywords: ["paralelismo", "doble-check"] },
 ];
 
 let sdd: string;
@@ -31,7 +32,7 @@ beforeAll(() => {
   sdd = readFileSync(SDD_PATH, "utf-8");
 });
 
-describe("ARCHITECTURE.md — cobertura de invariantes I-1..I-13", () => {
+describe("ARCHITECTURE.md — cobertura de invariantes I-1..I-14", () => {
   for (const { id, keywords } of INVARIANTS) {
     it(`${id} está documentado en ARCHITECTURE.md`, () => {
       // El propio marcador I-N debe aparecer
@@ -47,7 +48,7 @@ describe("ARCHITECTURE.md — cobertura de invariantes I-1..I-13", () => {
   }
 
   it("Apéndice A contiene una fila por cada invariante", () => {
-    // El apéndice debe tener las 13 filas de la tabla
+    // El apéndice debe tener las 14 filas de la tabla
     for (const { id } of INVARIANTS) {
       expect(sdd).toContain(id);
     }
