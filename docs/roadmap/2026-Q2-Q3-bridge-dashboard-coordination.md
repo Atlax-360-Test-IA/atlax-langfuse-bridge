@@ -212,10 +212,10 @@ S18-A dispara RFC porque toca contrato nuevo de API outbound. **Crear `docs/rfcs
 ### Items
 
 | ID    | Título                                                             | Size         | Blast | Hallazgo origen | Deps  |
-| ----- | ------------------------------------------------------------------ | ------------ | ----- | --------------- | ----- |
-| S23-A | **Spike**: viabilidad bridge → HTTP read-only para dashboard       | M            | LOW   | DASH 7          | none  |
-| S23-B | RFC-002: contrato HTTP bridge↔dashboard (decisión)                 | S            | LOW   | S23-A           | S23-A |
-| S23-C | Si decisión es "implementar": esqueleto de Hono server (sprint 24) | _proyectado_ | _-_   | _-_             | S23-B |
+| ----- | ------------------------------------------------------------------ | ------------ | ----- | --------------- | ----- | ---------------------------------------------- |
+| S23-A | **Spike**: viabilidad bridge → HTTP read-only para dashboard       | M            | LOW   | DASH 7          | none  | ✅ 2026-05-07                                  |
+| S23-B | RFC-002: contrato HTTP bridge↔dashboard (decisión)                 | S            | LOW   | S23-A           | S23-A | ✅ 2026-05-07                                  |
+| S23-C | Si decisión es "implementar": esqueleto de Hono server (sprint 24) | _proyectado_ | _-_   | _-_             | S23-B | ✅ No aplica — RFC-002 decide "no implementar" |
 
 ### Por qué este sprint es spike-heavy
 
