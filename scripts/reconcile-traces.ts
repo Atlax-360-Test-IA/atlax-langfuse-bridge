@@ -295,6 +295,7 @@ async function replayHook(
       cwd,
       permission_mode: "default",
       hook_event_name: "Stop",
+      _invokedByReconciler: true,
     });
 
     // Use the bun binary currently executing the reconciler. systemd user

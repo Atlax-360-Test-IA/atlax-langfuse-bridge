@@ -190,6 +190,53 @@ describe("langfuse-sync → Bun.serve mock HTTP", () => {
     expect(captured).toBeNull(); // no request sent
   });
 
+  test("trace tags include source:reconciler when _invokedByReconciler=true (S22-A)", async () => {
+    captured = null;
+    // Run hook with reconciler flag — simulates reconciler replay path
+    const stopEvent = JSON.stringify({
+      session_id: SESSION_ID,
+      transcript_path: FIXTURE_PATH,
+      cwd: "/tmp/test-cwd",
+      permission_mode: "default",
+      hook_event_name: "Stop",
+      _invokedByReconciler: true,
+    });
+    const proc = Bun.spawn(["bun", "run", HOOK_PATH], {
+      stdin: new TextEncoder().encode(stopEvent),
+      stdout: "ignore",
+      stderr: "pipe",
+      env: {
+        ...process.env,
+        LANGFUSE_HOST: `http://127.0.0.1:${serverPort}`,
+        LANGFUSE_PUBLIC_KEY: "pk-test-e2e",
+        LANGFUSE_SECRET_KEY: "sk-test-e2e",
+        LANGFUSE_USER_ID: "e2e-test@atlax360.com",
+        HOME: process.env["HOME"] ?? "/tmp",
+      },
+      cwd: join(import.meta.dir, ".."),
+    });
+    await proc.exited;
+    expect(proc.exitCode).toBe(0);
+    expect(captured).not.toBeNull();
+    const body = captured!.body as { batch: Array<Record<string, unknown>> };
+    const trace = body.batch.find((e) => e["type"] === "trace-create");
+    const tags = (trace!["body"] as Record<string, unknown>)[
+      "tags"
+    ] as string[];
+    expect(tags).toContain("source:reconciler");
+  });
+
+  test("trace tags do NOT include source:reconciler in normal hook invocation", async () => {
+    captured = null;
+    await runHook(SESSION_ID, FIXTURE_PATH);
+    const body = captured!.body as { batch: Array<Record<string, unknown>> };
+    const trace = body.batch.find((e) => e["type"] === "trace-create");
+    const tags = (trace!["body"] as Record<string, unknown>)[
+      "tags"
+    ] as string[];
+    expect(tags).not.toContain("source:reconciler");
+  });
+
   test("hook exits 0 with empty stdin (no transcript)", async () => {
     const proc = Bun.spawn(["bun", "run", HOOK_PATH], {
       stdin: new TextEncoder().encode(""),

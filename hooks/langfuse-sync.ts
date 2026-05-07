@@ -27,6 +27,8 @@ export interface StopEvent {
   cwd: string;
   permission_mode: string;
   hook_event_name: string;
+  /** Set by reconciler when replaying a drifted session (S22-A). */
+  _invokedByReconciler?: boolean;
 }
 
 export interface JournalEntry {
@@ -259,7 +261,7 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const { session_id, transcript_path, cwd } = event;
+  const { session_id, transcript_path, cwd, _invokedByReconciler } = event;
   if (!transcript_path || !session_id) process.exit(0);
 
   // Parse JSONL
@@ -335,6 +337,7 @@ async function main(): Promise<void> {
           `tier:${tierFile?.tier ?? "unknown"}`,
           `tier-source:${tierFile?.source ?? "none"}`,
           "cost-source:estimated",
+          ...(_invokedByReconciler ? ["source:reconciler"] : []),
         ],
         metadata: {
           project: projectName,
