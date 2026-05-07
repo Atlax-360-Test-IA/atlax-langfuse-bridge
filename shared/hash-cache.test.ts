@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from "bun:test";
+import { describe, expect, test, beforeEach, afterEach, spyOn } from "bun:test";
 import {
   traceHash,
   hashOf,
@@ -6,6 +6,7 @@ import {
   setCached,
   cacheSize,
   clearCache,
+  _runCleanup,
 } from "./hash-cache";
 
 beforeEach(() => {
@@ -112,5 +113,71 @@ describe("getCached / setCached", () => {
   test("cache survives moderate batch insert without unbounded growth", () => {
     for (let i = 0; i < 200; i++) setCached(`h-${i}`, `v-${i}`);
     expect(cacheSize()).toBe(200);
+  });
+});
+
+// ─── _runCleanup — interval callback ─────────────────────────────────────────
+
+describe("_runCleanup — cleanup callback", () => {
+  const TTL_24H = 24 * 60 * 60 * 1000;
+  let nowSpy: ReturnType<typeof spyOn>;
+
+  beforeEach(() => {
+    clearCache();
+  });
+
+  afterEach(() => {
+    nowSpy?.mockRestore();
+  });
+
+  test("removes entries older than 24h TTL", () => {
+    const t0 = 1_700_000_000_000;
+    nowSpy = spyOn(Date, "now").mockReturnValue(t0);
+    setCached("old-key", "old-value");
+    setCached("fresh-key", "fresh-value");
+
+    // Advance clock 25h for old-key (simulate: old-key written at t0, now=t0+25h)
+    // Fresh-key will also be "old" in this scenario since both written at t0.
+    // To test selective eviction: set fresh-key at t0+25h, old-key at t0.
+    nowSpy.mockReturnValue(t0 + (25 * TTL_24H) / 24); // t0 + 25h
+    setCached("fresh-key-2", "fresh-value-2"); // written at t0+25h
+
+    nowSpy.mockReturnValue(t0 + (25 * TTL_24H) / 24); // cleanup runs at t0+25h
+    _runCleanup();
+
+    // old-key and fresh-key (both written at t0) are now expired
+    expect(getCached("old-key")).toBeNull();
+    expect(getCached("fresh-key")).toBeNull();
+    // fresh-key-2 written at t0+25h, not yet expired at cleanup time (0ms old)
+    expect(getCached("fresh-key-2")).toBe("fresh-value-2");
+  });
+
+  test("keeps entries younger than TTL", () => {
+    const t0 = 1_700_000_000_000;
+    nowSpy = spyOn(Date, "now").mockReturnValue(t0);
+    setCached("young", "value");
+
+    // Only 12h later
+    nowSpy.mockReturnValue(t0 + 12 * 60 * 60 * 1000);
+    _runCleanup();
+
+    expect(getCached("young")).toBe("value");
+  });
+
+  test("handles empty cache without error", () => {
+    clearCache();
+    expect(() => _runCleanup()).not.toThrow();
+    expect(cacheSize()).toBe(0);
+  });
+
+  test("removes all entries when all are expired", () => {
+    const t0 = 1_700_000_000_000;
+    nowSpy = spyOn(Date, "now").mockReturnValue(t0);
+    for (let i = 0; i < 5; i++) setCached(`key-${i}`, `val-${i}`);
+    expect(cacheSize()).toBe(5);
+
+    nowSpy.mockReturnValue(t0 + 25 * 60 * 60 * 1000); // 25h later
+    _runCleanup();
+    expect(cacheSize()).toBe(0);
   });
 });

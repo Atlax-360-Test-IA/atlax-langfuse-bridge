@@ -11,6 +11,46 @@ function makeResponse(body: unknown, status = 200): Response {
   });
 }
 
+describe("annotateObservation.validate — input type guards", () => {
+  test("rejects non-object input (string primitive)", () => {
+    const r = annotateObservation.validate("not-an-object");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("input must be an object");
+  });
+
+  test("rejects null input", () => {
+    const r = annotateObservation.validate(null);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("input must be an object");
+  });
+
+  test("rejects number input", () => {
+    const r = annotateObservation.validate(42);
+    expect(r.ok).toBe(false);
+  });
+
+  test("rejects observationId of wrong type (number)", () => {
+    const r = annotateObservation.validate({
+      traceId: "cc-123",
+      name: "agent:x",
+      value: 1,
+      observationId: 42,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("observationId must be string");
+  });
+
+  test("rejects observationId of wrong type (boolean)", () => {
+    const r = annotateObservation.validate({
+      traceId: "cc-123",
+      name: "agent:x",
+      value: 1,
+      observationId: true,
+    });
+    expect(r.ok).toBe(false);
+  });
+});
+
 describe("annotateObservation.validate", () => {
   test("accepts minimal valid input (numeric)", () => {
     const r = annotateObservation.validate({

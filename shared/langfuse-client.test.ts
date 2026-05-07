@@ -318,4 +318,111 @@ describe("isSafeHost", () => {
   test("rejects path traversal in raw string", () => {
     expect(isSafeHost("http://localhost/../../../etc/passwd")).toBe(false);
   });
+
+  test("rejects strings that are not URLs at all (catch branch)", () => {
+    // new URL() throws for these → isSafeHost catch → false
+    expect(isSafeHost("not-a-url-at-all")).toBe(false);
+    expect(isSafeHost("://broken")).toBe(false);
+    expect(isSafeHost("http://")).toBe(false);
+  });
+});
+
+// ─── getGenerationsForTrace ───────────────────────────────────────────────────
+
+describe("getGenerationsForTrace", () => {
+  const origEnv = { ...process.env };
+  let fetchSpy: ReturnType<typeof spyOn>;
+
+  beforeEach(() => {
+    process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
+    process.env["LANGFUSE_SECRET_KEY"] = "sk-test";
+    process.env["LANGFUSE_HOST"] = "http://localhost:3000";
+    fetchSpy = spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+    process.env = { ...origEnv };
+  });
+
+  test("sums calculatedTotalCost across observations", async () => {
+    fetchSpy.mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: [
+              { calculatedTotalCost: 0.05 },
+              { calculatedTotalCost: 0.03 },
+            ],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const { getGenerationsForTrace } = await import("./langfuse-client");
+    const result = await getGenerationsForTrace("cc-abc");
+    expect(result).toBeCloseTo(0.08, 6);
+  });
+
+  test("returns 0 for empty observations array", async () => {
+    fetchSpy.mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ data: [] }), { status: 200 }),
+      ),
+    );
+    const { getGenerationsForTrace } = await import("./langfuse-client");
+    const result = await getGenerationsForTrace("cc-empty");
+    expect(result).toBe(0);
+  });
+
+  test("treats null calculatedTotalCost as 0 via nullish coalescing", async () => {
+    fetchSpy.mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: [
+              { calculatedTotalCost: null },
+              { calculatedTotalCost: 0.02 },
+            ],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const { getGenerationsForTrace } = await import("./langfuse-client");
+    const result = await getGenerationsForTrace("cc-null");
+    expect(result).toBeCloseTo(0.02, 6);
+  });
+
+  test("returns null when fetch throws (degrades gracefully)", async () => {
+    fetchSpy.mockImplementation(() =>
+      Promise.reject(new Error("network error")),
+    );
+    const { getGenerationsForTrace } = await import("./langfuse-client");
+    const result = await getGenerationsForTrace("cc-err");
+    expect(result).toBeNull();
+  });
+
+  test("returns null on non-ok response (degrades gracefully)", async () => {
+    fetchSpy.mockImplementation(() =>
+      Promise.resolve(new Response("server error", { status: 500 })),
+    );
+    const { getGenerationsForTrace } = await import("./langfuse-client");
+    const result = await getGenerationsForTrace("cc-500");
+    expect(result).toBeNull();
+  });
+
+  test("calls correct URL with traceId + type=GENERATION", async () => {
+    fetchSpy.mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ data: [] }), { status: 200 }),
+      ),
+    );
+    const { getGenerationsForTrace } = await import("./langfuse-client");
+    await getGenerationsForTrace("cc-url-check");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("traceId=cc-url-check");
+    expect(url).toContain("type=GENERATION");
+    expect(url).toContain("limit=50");
+  });
 });
