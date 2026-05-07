@@ -6,11 +6,22 @@
 # ============================================================
 
 model_list:
-  # Modelo por defecto para workloads no-interactivos (Orvian, Atalaya).
-  # Expone el alias "claude-sonnet-4-6" a los clientes OpenAI-compatible.
+  # ── Sonnet 4.6 — workloads diarios (default para Orvian, Atalaya) ──────────
   - model_name: claude-sonnet-4-6
     litellm_params:
       model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ── Haiku 4.5 — clasificación, resúmenes, tasks de bajo coste ─────────────
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ── Opus 4.7 — arquitectura multi-fichero, auditorías, razonamiento profundo ─
+  - model_name: claude-opus-4-7
+    litellm_params:
+      model: anthropic/claude-opus-4-7
       api_key: os.environ/ANTHROPIC_API_KEY
 
 general_settings:
