@@ -38,6 +38,17 @@ Semver retroactivo. Política:
 
 - ADR-008 documentando límites de recuperabilidad y lecciones del incidente 22-Apr-2026
 
+### Ops (Sprint 23 — 2026-05-07)
+
+- **S23-A**: spike `docs/spikes/S23-A-bridge-http-viability.md` — análisis exhaustivo de si `atlax-claude-dashboard` necesita lectura HTTP del bridge. Hallazgo clave: el dashboard es 100% independiente (Anthropic Admin API → Postgres propio, 0 referencias al bridge/Langfuse en su código). No existe demanda actual.
+- **S23-B**: `docs/rfcs/RFC-002-bridge-http-no-implementar.md` — decisión "no implementar" HTTP server en el bridge. Razones: no hay demanda, viola I-13 en espíritu, añade SPOF, alternativa superior post-v1 es `dashboard → Langfuse API` directa. CP-4 del roadmap resuelto como CP-4-v2 (post-v1, sin cambios en bridge).
+- **S23-C**: no aplica — RFC-002 decide "no implementar", nada que proyectar a Sprint 24.
+
+### Fix (PR #61 — 2026-05-07)
+
+- `docs/operations/langfuse-dashboard-guide.md`: corrección nombre trace `langfuse-sync` → `claude-code-session` en tabla de trazas disponibles (el hook emite `name: "claude-code-session"` en línea 325 de `hooks/langfuse-sync.ts`)
+- `tests/langfuse-sync-unit.test.ts`: 26 tests unitarios directos sobre funciones exportadas del hook (`calcCost`, `getBillingTier`, `getDevIdentity`, `getProjectName`, `readTierFile`, `detectOS`); cobertura de `hooks/langfuse-sync.ts` sube de ~25% a ≥60%
+
 ### Ops (Sprint 22 — 2026-05-07)
 
 - **S22-A** (PR #56): tag `source:reconciler` en todos los traces emitidos por el reconciler
@@ -49,7 +60,7 @@ Semver retroactivo. Política:
 
 ### Metrics
 
-- Tests: 750 / expects: 1370 / files: 48 / 0 fail (Sprint 21-22 consolidado)
+- Tests: 776 / expects: 1402 / files: 49 / 0 fail (Sprint 23 + fix PR #61)
 
 ---
 
