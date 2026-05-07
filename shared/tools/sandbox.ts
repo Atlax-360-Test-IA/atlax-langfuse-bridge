@@ -59,6 +59,38 @@ export function getSandboxMode(
  */
 const fixtureRegistry = new Map<string, unknown>();
 
+/**
+ * Mutex per-tool para serializar ejecuciones concurrentes (S20-D / GAP H5-B).
+ *
+ * Problema: dos agentes que llaman a la misma tool simultáneamente pueden
+ * producir writes concurrentes a Langfuse o al sistema de archivos.
+ * Solución: cola de Promises por nombre de tool — cada ejecución se encola
+ * detrás de la anterior y espera a que resuelva antes de comenzar.
+ *
+ * Solo aplica en modo "off" (ejecución real). Los modos sandbox no tienen
+ * estado compartido que proteger.
+ */
+const executionQueue = new Map<string, Promise<void>>();
+
+function withMutex<T>(toolName: string, fn: () => Promise<T>): Promise<T> {
+  const prev = executionQueue.get(toolName) ?? Promise.resolve();
+  let resolveSlot!: () => void;
+  const slot = new Promise<void>((res) => {
+    resolveSlot = res;
+  });
+  executionQueue.set(toolName, slot);
+  return prev.then(() => fn()).finally(resolveSlot);
+}
+
+/** Limpia la cola de un tool (útil en tests para resetear estado entre casos). */
+export function clearExecutionQueue(toolName?: string): void {
+  if (toolName) {
+    executionQueue.delete(toolName);
+  } else {
+    executionQueue.clear();
+  }
+}
+
 export function registerFixture(toolName: string, fixture: unknown): void {
   fixtureRegistry.set(toolName, fixture);
 }
@@ -88,7 +120,16 @@ export function withSandbox<TInput, TOutput>(
   modeOverride?: SandboxMode,
 ): AgentTool<TInput, TOutput | SandboxedExecutionOutput> {
   const mode = modeOverride ?? getSandboxMode();
-  if (mode === "off") return tool;
+  if (mode === "off") {
+    // En modo real, envolvemos execute() con el mutex per-tool para serializar
+    // writes concurrentes (S20-D). El contrato de la tool no cambia.
+    return {
+      ...tool,
+      async execute(input, ctx) {
+        return withMutex(tool.name, () => tool.execute(input, ctx));
+      },
+    };
+  }
 
   return {
     name: tool.name,

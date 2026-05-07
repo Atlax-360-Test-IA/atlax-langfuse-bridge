@@ -5,6 +5,7 @@ import {
   withSandboxAll,
   registerFixture,
   clearFixtures,
+  clearExecutionQueue,
   type SandboxedExecutionOutput,
 } from "./sandbox";
 import type { AgentTool, ToolContext } from "./types";
@@ -68,15 +69,45 @@ describe("getSandboxMode", () => {
 // ─── withSandbox(off) ────────────────────────────────────────────────────────
 
 describe("withSandbox — off mode", () => {
-  test("returns the original tool unchanged", () => {
+  afterEach(() => clearExecutionQueue());
+
+  test("preserves tool name, description and schema", () => {
     const wrapped = withSandbox(tool, "off");
-    expect(wrapped).toBe(tool);
+    expect(wrapped.name).toBe(tool.name);
+    expect(wrapped.description).toBe(tool.description);
+    expect(wrapped.inputSchema).toBe(tool.inputSchema);
   });
 
   test("calls real execute", async () => {
     const wrapped = withSandbox(tool, "off");
     const out = await wrapped.execute({ x: 1 }, ctx);
     expect(out).toEqual({ real: true, value: 42 });
+  });
+
+  test("serializes concurrent executions (mutex)", async () => {
+    const order: number[] = [];
+    let resolve1!: () => void;
+    const blocking: AgentTool<any, any> = {
+      ...tool,
+      execute: async (input: { seq: number }) => {
+        order.push(input.seq);
+        if (input.seq === 1) {
+          await new Promise<void>((r) => {
+            resolve1 = r;
+          });
+        }
+        return {};
+      },
+    };
+    const wrapped = withSandbox(blocking, "off");
+    const p1 = wrapped.execute({ seq: 1 }, ctx);
+    const p2 = wrapped.execute({ seq: 2 }, ctx);
+    // Let the event loop run p1's execute start
+    await new Promise((r) => setTimeout(r, 0));
+    resolve1();
+    await Promise.all([p1, p2]);
+    // p2 must start AFTER p1 finishes — order must be [1, 2]
+    expect(order).toEqual([1, 2]);
   });
 });
 
