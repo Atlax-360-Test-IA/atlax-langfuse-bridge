@@ -56,9 +56,10 @@ describe("aggregateLines", () => {
     //              = (3000 + 750 + 30 + 7500) / 1M = 0.01128
     // Sonnet turn 2: (2000*3 + 0*3.75 + 500*0.3 + 1500*15) / 1M
     //              = (6000 + 0 + 150 + 22500) / 1M = 0.02865
-    // Opus turn:     (3000*15 + 500*18.75 + 0*1.5 + 2000*75) / 1M
-    //              = (45000 + 9375 + 0 + 150000) / 1M = 0.204375
-    expect(result.totalCost).toBeCloseTo(0.01128 + 0.02865 + 0.204375, 5);
+    // Opus 4.7 turn (pricing nuevo $5/$25):
+    //              (3000*5 + 500*6.25 + 0*0.5 + 2000*25) / 1M
+    //              = (15000 + 3125 + 0 + 50000) / 1M = 0.068125
+    expect(result.totalCost).toBeCloseTo(0.01128 + 0.02865 + 0.068125, 5);
   });
 
   test("handles empty lines gracefully", () => {
