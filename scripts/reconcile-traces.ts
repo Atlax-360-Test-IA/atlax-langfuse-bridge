@@ -22,13 +22,15 @@
  */
 
 import { join, dirname, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { aggregate } from "../shared/aggregate";
 import { classifyDrift, type DriftStatus } from "../shared/drift";
-import { emitDegradation } from "../shared/degradation";
+import { emitDegradation, type DegradationEntry } from "../shared/degradation";
 import {
   getTrace as langfuseGetTrace,
   getGenerationsForTrace as langfuseGetGenerationsForTrace,
+  isSafeHost,
   type LangfuseTrace,
 } from "../shared/langfuse-client";
 import { discoverRecentJsonls } from "../shared/jsonl-discovery";
@@ -346,6 +348,99 @@ async function replayHook(
   });
 }
 
+// ─── S22-B: bridge health trace → Langfuse ──────────────────────────────────
+
+export interface BridgeScanSummary {
+  candidates: number;
+  drift: number;
+  repaired: number;
+  failed: number;
+  windowHours: number;
+  dryRun: boolean;
+  degradations: DegradationEntry[];
+}
+
+/**
+ * Envía un trace `bridge-health` a Langfuse con el resumen del scan y cualquier
+ * evento de degradación capturados durante la ejecución del reconciler (S22-B).
+ *
+ * Usa traceId `bridge-reconciler-YYYY-MM-DD` (day-scoped) para aprovechar
+ * el upsert idempotente de Langfuse (I-2). Si el cron corre varias veces al día
+ * el trace se actualiza, no se duplica.
+ *
+ * Es opt-in: solo se ejecuta cuando LANGFUSE_PUBLIC_KEY y LANGFUSE_SECRET_KEY
+ * están configuradas (ya verificadas al inicio de main). Errores son no-fatales.
+ */
+export async function sendBridgeHealthTrace(
+  summary: BridgeScanSummary,
+  opts: {
+    host: string;
+    publicKey: string;
+    secretKey: string;
+  },
+): Promise<void> {
+  if (!isSafeHost(opts.host)) return;
+
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const traceId = `bridge-reconciler-${today}`;
+  const now = new Date().toISOString();
+
+  const credentials = Buffer.from(
+    `${opts.publicKey}:${opts.secretKey}`,
+  ).toString("base64");
+
+  const hasIssues = summary.failed > 0 || summary.degradations.length > 0;
+  const status = hasIssues ? "degraded" : "ok";
+
+  const batch = [
+    {
+      id: randomUUID(),
+      type: "trace-create",
+      timestamp: now,
+      body: {
+        id: traceId,
+        timestamp: now,
+        name: "bridge-health",
+        tags: ["service:bridge", `status:${status}`, `date:${today}`],
+        metadata: {
+          windowHours: summary.windowHours,
+          candidates: summary.candidates,
+          drift: summary.drift,
+          repaired: summary.repaired,
+          failed: summary.failed,
+          dryRun: summary.dryRun,
+          degradationCount: summary.degradations.length,
+          degradations: summary.degradations,
+        },
+        input: { candidates: summary.candidates, drift: summary.drift },
+        output: { repaired: summary.repaired, failed: summary.failed, status },
+      },
+    },
+  ];
+
+  try {
+    const host = opts.host.replace(/\/$/, "");
+    const res = await fetch(`${host}/api/public/ingestion`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${credentials}`,
+      },
+      body: JSON.stringify({ batch }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      emitDegradation(
+        "sendBridgeHealthTrace:http-error",
+        new Error(`${res.status}: ${body.slice(0, 200)}`),
+      );
+    }
+  } catch (err) {
+    emitDegradation("sendBridgeHealthTrace:fetch", err);
+  }
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -356,7 +451,24 @@ async function main() {
     process.exit(1);
   }
 
-  const paths = await discoverRecentJsonls(WINDOW_HOURS, emitDegradation);
+  // S22-B: collector de degradaciones del scan — intercepta emitDegradation para
+  // acumular eventos y enviarlos luego como bridge-health trace.
+  const collectedDegradations: DegradationEntry[] = [];
+  function collectingEmitDegradation(source: string, err: unknown): void {
+    const entry: DegradationEntry = {
+      type: "degradation",
+      source,
+      error: err instanceof Error ? err.message : String(err),
+      ts: new Date().toISOString(),
+    };
+    collectedDegradations.push(entry);
+    emitDegradation(source, err); // también escribe a stderr como siempre
+  }
+
+  const paths = await discoverRecentJsonls(
+    WINDOW_HOURS,
+    collectingEmitDegradation,
+  );
   log("info", "scan-started", {
     windowHours: WINDOW_HOURS,
     candidates: paths.length,
@@ -466,10 +578,24 @@ async function main() {
       try {
         await reconcileCostAgainstAnthropic(estimatedByModel, range);
       } catch (err) {
-        emitDegradation("reconcile:cost-comparison", err);
+        collectingEmitDegradation("reconcile:cost-comparison", err);
       }
     }
   }
+
+  // S22-B: enviar bridge-health trace con el resumen del scan y degradaciones.
+  await sendBridgeHealthTrace(
+    {
+      candidates: paths.length,
+      drift,
+      repaired,
+      failed,
+      windowHours: WINDOW_HOURS,
+      dryRun: DRY_RUN,
+      degradations: collectedDegradations,
+    },
+    { host: HOST, publicKey: PK, secretKey: SK },
+  );
 
   process.exit(failed > 0 ? 2 : 0);
 }

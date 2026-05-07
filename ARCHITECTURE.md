@@ -420,16 +420,16 @@ Ver `infra/backup-story.md` para detalle de backup story (RPO ≤ 1 min).
 
 ## §10 · Testing
 
-**Estado actual**: 651 tests / 1217 expects / 42 ficheros / 0 fallos.
+**Estado actual**: 745 tests / 1365 expects / 47 ficheros / 0 fallos.
 
 ### Pirámide de tests
 
-| Capa                 | Ficheros clave                                                                                | Cobertura                                          |
-| -------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| **Unitarios**        | `tests/*.test.ts`, `shared/*.test.ts`, `scripts/*.test.ts`, `browser-extension/src/*.test.js` | Todos los módulos                                  |
-| **Cross-validation** | `tests/cross-validation.test.ts`                                                              | Invariantes entre módulos (pricing, drift, tier)   |
-| **E2E CI-runnable**  | `tests/langfuse-sync-http.test.ts`, `tests/reconcile-replay.test.ts`                          | Hook HTTP + reconciler DRY_RUN con Bun.serve mocks |
-| **ADR ejecutable**   | `tests/cloud-run-boundary.test.ts`                                                            | Verifica I-13 estructuralmente (17 tests)          |
+| Capa                 | Ficheros clave                                                                                      | Cobertura                                                                |
+| -------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Unitarios**        | `tests/*.test.ts`, `shared/*.test.ts`, `scripts/*.test.ts`, `browser-extension/src/*.test.js`       | Todos los módulos                                                        |
+| **Cross-validation** | `tests/cross-validation.test.ts`                                                                    | Invariantes entre módulos (pricing, drift, tier)                         |
+| **E2E CI-runnable**  | `tests/langfuse-sync-http.test.ts`, `tests/reconcile-replay.test.ts`, `tests/bridge-health.test.ts` | Hook HTTP + reconciler DRY_RUN + bridge-health trace con Bun.serve mocks |
+| **ADR ejecutable**   | `tests/cloud-run-boundary.test.ts`                                                                  | Verifica I-13 estructuralmente (17 tests)                                |
 
 ### Mapeo invariante → fichero de test
 
