@@ -38,9 +38,18 @@ Semver retroactivo. Política:
 
 - ADR-008 documentando límites de recuperabilidad y lecciones del incidente 22-Apr-2026
 
+### Ops (Sprint 22 — 2026-05-07)
+
+- **S22-A** (PR #56): tag `source:reconciler` en todos los traces emitidos por el reconciler
+- **S22-B** (PR #57): `sendBridgeHealthTrace()` — trace `bridge-health` al final de cada scan (traceId day-scoped, tags `status:ok/degraded`, `metadata.degradations[]`); 10 tests en `tests/bridge-health.test.ts`
+- **S22-C**: audit deps — `bun-types@^1.3.13` (compatible con bun 1.3.12), `typescript@5.9.3` (latest 5.x, no bump a 6 — breaking), `zod@3.25.76` (latest 3.x, no bump a 4 — API incompatible). `bun run check` pasa sin warnings.
+- **S22-D**: `docs/operations/langfuse-dashboard-guide.md` — guía de observabilidad: 7 queries de referencia (sesiones/dev, bridge-health, drift rate, días degraded, cost divergence, cobertura IDE, tiempo a primer trace) + alertas recomendadas + API curl snippets + runbook de diagnóstico rápido
+- **S21-A/C/D** (PR #59): `litellm-onboarding.md`, `pilot-onboarding.sh` (--litellm-mode, --dry-run), `pilot-kpis.md` (exit criteria 2 semanas consecutivas)
+- **S20-A/B/C** (PR #58): smoke tests LiteLLM virtual keys — /key/generate shape, budget enforcement (400 budget_exceeded), atribución Langfuse (user_api_key_alias ✓, user_api_key_user_id null = bug conocido v1.83.7)
+
 ### Metrics
 
-- Tests: 523 / expects: 898 / files: 37 (sin cambios funcionales)
+- Tests: 750 / expects: 1370 / files: 48 / 0 fail (Sprint 21-22 consolidado)
 
 ---
 

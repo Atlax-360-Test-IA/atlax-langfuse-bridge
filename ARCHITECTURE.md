@@ -164,7 +164,8 @@ atlax-langfuse-bridge/
 │   ├── operations/
 │   │   ├── runbook.md                # Runbook operativo
 │   │   ├── litellm-onboarding.md     # Guía onboarding devs piloto (S21-A)
-│   │   └── pilot-kpis.md            # KPIs formales del piloto + exit criteria (S21-D)
+│   │   ├── pilot-kpis.md             # KPIs formales del piloto + exit criteria (S21-D)
+│   │   └── langfuse-dashboard-guide.md # Queries observabilidad bridge + piloto (S22-D)
 │   └── systemd/                      # User units Linux/WSL del reconciler
 │
 ├── setup/                            [edge installers]
