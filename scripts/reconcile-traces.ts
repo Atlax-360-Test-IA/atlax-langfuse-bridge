@@ -32,6 +32,10 @@ import {
   type LangfuseTrace,
 } from "../shared/langfuse-client";
 import { discoverRecentJsonls } from "../shared/jsonl-discovery";
+import {
+  getCostReport,
+  sumCostByModel,
+} from "../shared/anthropic-admin-client";
 
 const HOST = (process.env["LANGFUSE_HOST"] ?? "http://localhost:3000").replace(
   /\/$/,
@@ -52,6 +56,22 @@ const HOOK_PATH = resolve(
   "hooks",
   "langfuse-sync.ts",
 );
+
+// S18-D: umbral de divergencia entre coste estimado local y coste real Anthropic.
+// >5% sugiere drift sistémico (modelo nuevo con pricing incorrecto, fórmula
+// errónea, gap entre lo que el JSONL reporta y lo que Anthropic factura).
+// Override vía COST_DIVERGENCE_THRESHOLD si el ruido normal lo justifica.
+export const DEFAULT_COST_DIVERGENCE_THRESHOLD = 0.05;
+const _rawThreshold = Number(
+  process.env["COST_DIVERGENCE_THRESHOLD"] ?? DEFAULT_COST_DIVERGENCE_THRESHOLD,
+);
+const COST_DIVERGENCE_THRESHOLD =
+  Number.isFinite(_rawThreshold) && _rawThreshold > 0
+    ? _rawThreshold
+    : DEFAULT_COST_DIVERGENCE_THRESHOLD;
+// Coste mínimo (USD) para emitir comparación. Modelos con <$0.10 de tráfico
+// generan ratios ruidosos que no aportan señal.
+const COST_COMPARE_MIN_USD = 0.1;
 
 // ─── Structured JSON logging (journalctl-friendly) ───────────────────────────
 
@@ -90,6 +110,170 @@ export async function getGenerationCost(
   } catch (err) {
     emitDegradation("getGenerationCost:fetch", err);
     return null;
+  }
+}
+
+// ─── S18-B/D: comparación coste estimado vs. real (Anthropic Admin API) ─────
+
+/**
+ * Normaliza un model ID al "family key" para agrupación. Dos sesiones con
+ * `claude-haiku-4-5-20251001` y `claude-haiku-4-5` deben agruparse juntas
+ * porque comparten pricing. Aplicamos el mismo orden longest-first que
+ * `getPricing()` para no agrupar erróneamente Opus 4.7 con Opus 4.
+ */
+const FAMILY_KEYS = [
+  "claude-opus-4-7",
+  "claude-opus-4-6",
+  "claude-opus-4-5",
+  "claude-opus-4-1",
+  "claude-sonnet-4-6",
+  "claude-sonnet-4-5",
+  "claude-sonnet-4",
+  "claude-haiku-4-5",
+  "claude-opus-4",
+] as const;
+
+export function familyKey(model: string): string {
+  for (const k of FAMILY_KEYS) {
+    if (model.includes(k)) return k;
+  }
+  return model;
+}
+
+/**
+ * Devuelve el rango UTC day-aligned para enviar al cost_report:
+ * [startOfDay(min(starts)), startOfDay(max(starts)) + 1d].
+ */
+export function computeReportRange(
+  sessionStarts: string[],
+): { startingAt: string; endingAt: string } | null {
+  const valid = sessionStarts
+    .map((s) => Date.parse(s))
+    .filter((n) => Number.isFinite(n));
+  if (valid.length === 0) return null;
+  const minMs = Math.min(...valid);
+  const maxMs = Math.max(...valid);
+  const startDay = new Date(minMs);
+  startDay.setUTCHours(0, 0, 0, 0);
+  const endDay = new Date(maxMs);
+  endDay.setUTCHours(0, 0, 0, 0);
+  endDay.setUTCDate(endDay.getUTCDate() + 1); // exclusive end
+  return {
+    startingAt: startDay.toISOString().replace(/\.\d{3}Z$/, "Z"),
+    endingAt: endDay.toISOString().replace(/\.\d{3}Z$/, "Z"),
+  };
+}
+
+interface CostComparisonRow {
+  model: string;
+  estimatedUSD: number;
+  realUSD: number;
+  divergencePct: number;
+  exceedsThreshold: boolean;
+}
+
+/**
+ * Detecta el escenario "seat-only": el bridge observó coste estimado pero el
+ * cost_report de Anthropic está a 0 para todas las filas. Indica que TODO el
+ * tráfico fue OAuth/seats — no hay correlato en facturación API. No es drift,
+ * es la condición operativa esperada con seats Premium.
+ */
+export function isSeatOnlyScenario(
+  rows: Array<{ estimatedUSD: number; realUSD: number }>,
+): boolean {
+  if (rows.length === 0) return false;
+  const allReal = rows.reduce((acc, r) => acc + r.realUSD, 0);
+  const allEst = rows.reduce((acc, r) => acc + r.estimatedUSD, 0);
+  return allReal === 0 && allEst > 0;
+}
+
+export function compareCostByModel(
+  estimatedByModel: Map<string, number>,
+  realByModel: Map<string, number>,
+  threshold: number,
+  minCompareUsd: number,
+): CostComparisonRow[] {
+  const rows: CostComparisonRow[] = [];
+  const allKeys = new Set([...estimatedByModel.keys(), ...realByModel.keys()]);
+  for (const k of allKeys) {
+    const est = estimatedByModel.get(k) ?? 0;
+    const real = realByModel.get(k) ?? 0;
+    // Filas con poco coste a ambos lados son ruido.
+    if (est < minCompareUsd && real < minCompareUsd) continue;
+    const baseline = Math.max(est, real);
+    const divergencePct = baseline > 0 ? Math.abs(est - real) / baseline : 0;
+    rows.push({
+      model: k,
+      estimatedUSD: Number(est.toFixed(4)),
+      realUSD: Number(real.toFixed(4)),
+      divergencePct: Number(divergencePct.toFixed(4)),
+      exceedsThreshold: divergencePct > threshold,
+    });
+  }
+  return rows;
+}
+
+async function reconcileCostAgainstAnthropic(
+  estimatedByModel: Map<string, number>,
+  range: { startingAt: string; endingAt: string },
+): Promise<void> {
+  let report;
+  try {
+    report = await getCostReport({
+      startingAt: range.startingAt,
+      endingAt: range.endingAt,
+    });
+  } catch (err) {
+    emitDegradation("reconcile:cost-report-fetch", err);
+    return;
+  }
+  const realByModelRaw = sumCostByModel(report);
+  // Reduce el cost_report al mismo formato familyKey.
+  const realByModel = new Map<string, number>();
+  for (const [k, v] of realByModelRaw) {
+    if (k === "__non_token__") continue; // web_search etc. — no comparable con tokens
+    const fk = familyKey(k);
+    realByModel.set(fk, (realByModel.get(fk) ?? 0) + v);
+  }
+
+  const rows = compareCostByModel(
+    estimatedByModel,
+    realByModel,
+    COST_DIVERGENCE_THRESHOLD,
+    COST_COMPARE_MIN_USD,
+  );
+
+  log("info", "cost-comparison", {
+    range,
+    threshold: COST_DIVERGENCE_THRESHOLD,
+    rows,
+  });
+
+  // Caso especial: todas las filas tienen realUSD=0. Significa que el bridge
+  // observó tráfico (estimatedUSD>0) que NO aparece en cost_report — típicamente
+  // sesiones de seat Premium (OAuth) que no se facturan vía API. Es información,
+  // no anomalía: emitir un único log y suprimir los warnings por modelo (que
+  // serían siempre 100% divergencia).
+  if (isSeatOnlyScenario(rows)) {
+    const totalEst = rows.reduce((acc, r) => acc + r.estimatedUSD, 0);
+    log("info", "cost-comparison-seat-only", {
+      totalEstimatedUSD: Number(totalEst.toFixed(4)),
+      models: rows.map((r) => r.model),
+      note: "tráfico estimado sin correlato en cost_report — consistente con seats Premium (no facturados vía API)",
+    });
+    return;
+  }
+
+  for (const row of rows) {
+    if (row.exceedsThreshold) {
+      log("warn", "cost-divergence-detected", {
+        model: row.model,
+        estimatedUSD: row.estimatedUSD,
+        realUSD: row.realUSD,
+        divergencePct: row.divergencePct,
+        threshold: COST_DIVERGENCE_THRESHOLD,
+      });
+    }
   }
 }
 
@@ -182,6 +366,12 @@ async function main() {
   let repaired = 0;
   let failed = 0;
 
+  // S18-B: acumular coste estimado por modelo + timestamps de inicio para
+  // comparar contra Anthropic cost_report al final del scan. Solo se usa si
+  // ANTHROPIC_ADMIN_API_KEY está configurada.
+  const estimatedByModel = new Map<string, number>();
+  const sessionStarts: string[] = [];
+
   for (const p of paths) {
     const sid = (p.split("/").pop() ?? "").replace(/\.jsonl$/, "");
 
@@ -202,6 +392,13 @@ async function main() {
     // (the hook itself exits early on empty usage). Reporting them as drift
     // is noise.
     if (local.turns === 0) continue;
+
+    // S18-B: acumular por familia de modelo y guardar timestamp de inicio.
+    if (local.start) sessionStarts.push(local.start);
+    for (const [model, agg] of local.models) {
+      const fk = familyKey(model);
+      estimatedByModel.set(fk, (estimatedByModel.get(fk) ?? 0) + agg.cost);
+    }
 
     const remote = await getTrace(tid);
     const localForDrift = { ...local, end: local.end ?? null };
@@ -258,6 +455,20 @@ async function main() {
     repaired,
     failed,
   });
+
+  // S18-B/D: comparación post-scan con Anthropic cost_report.
+  // Opt-in: solo se ejecuta si ANTHROPIC_ADMIN_API_KEY está set.
+  // Errores son no-fatales — el reconciler termina con su exit code habitual.
+  if (process.env["ANTHROPIC_ADMIN_API_KEY"] && estimatedByModel.size > 0) {
+    const range = computeReportRange(sessionStarts);
+    if (range) {
+      try {
+        await reconcileCostAgainstAnthropic(estimatedByModel, range);
+      } catch (err) {
+        emitDegradation("reconcile:cost-comparison", err);
+      }
+    }
+  }
 
   process.exit(failed > 0 ? 2 : 0);
 }
