@@ -334,6 +334,7 @@ async function main(): Promise<void> {
             : ["infra:anthropic"]),
           `tier:${tierFile?.tier ?? "unknown"}`,
           `tier-source:${tierFile?.source ?? "none"}`,
+          "cost-source:estimated",
         ],
         metadata: {
           project: projectName,
@@ -350,6 +351,7 @@ async function main(): Promise<void> {
           sessionEnd: sessionEnd ?? null,
           estimatedCostUSD: Number(totalCost.toFixed(6)),
           modelsUsed: [...agg.models.keys()],
+          costSource: "estimated",
         },
         input: { turns: turnCount },
         output: { estimatedCostUSD: totalCost },

@@ -16,6 +16,7 @@
 - [Browser extension — diagnóstico](#browser-extension--diagnóstico)
 - [Rollback de Langfuse](#rollback-de-langfuse)
 - [Actualizar el hook en máquinas dev](#actualizar-el-hook-en-máquinas-dev)
+- [Actualizar pricing tras nuevo modelo Anthropic](#actualizar-pricing-tras-nuevo-modelo-anthropic)
 
 ---
 
@@ -399,12 +400,44 @@ bash setup/setup.sh
 
 ---
 
+## Actualizar pricing tras nuevo modelo Anthropic
+
+Cuando Anthropic publica un nuevo modelo o cambia precios, sigue este procedimiento:
+
+```bash
+# 1. Verificar qué hay actualmente
+./scripts/sync-pricing.sh
+
+# 2. Editar shared/model-pricing.ts (añadir entrada o corregir valores)
+#    Fuente oficial: https://platform.claude.com/docs/en/about-claude/pricing
+
+# 3. Añadir el nuevo modelo a EXPECTED_MODELS en scripts/sync-pricing.sh
+
+# 4. Validar y testear
+bun test shared/model-pricing.test.ts
+bun run check
+
+# 5. Comparar con dashboard (si tienes acceso al path local)
+DASHBOARD_PRICING_PATH=~/work/atlax-claude-dashboard/src/lib/pricing.ts \
+  ./scripts/sync-pricing.sh
+
+# 6. Commit y PR
+git add shared/model-pricing.ts scripts/sync-pricing.sh
+git commit -m "chore(pricing): actualizar <modelo> a $X/$Y MTok"
+```
+
+**Nota**: `sync-pricing.sh` detecta modelos faltantes pero no valida valores de precio —
+verificar siempre manualmente contra la página oficial de Anthropic.
+
+---
+
 ## Mantenimiento
 
 - **Backup local recurrente**: `cron` o `systemd` que ejecute
   `pg_dump` + `clickhouse-backup` → `~/atlax-backups/`
 - **Rotación de logs**: journalctl gestiona automático (configurable en `journald.conf`)
 - **Monitoreo de espacio docker**: `docker system df` mensual; `docker system prune` si crece
+- **Pricing sync mensual**: ejecutar `./scripts/sync-pricing.sh` en la Scope Review mensual para detectar drift
 
 ---
 
