@@ -299,25 +299,85 @@ El experimento del 2026-05-07 demostró límites duros del paralelismo agéntico
 
 ---
 
+### S17-F · Detección de generations sin coste calculado (post-fix blind spot)
+
+| Campo               | Valor                                                                          |
+| ------------------- | ------------------------------------------------------------------------------ |
+| **Owner**           | jgcalvo                                                                        |
+| **Size**            | M (2-3d)                                                                       |
+| **Blast radius**    | MEDIUM                                                                         |
+| **Scope tag**       | `atlax-langfuse-bridge`                                                        |
+| **Dependencies**    | S17-A (no bloquea pero conviene)                                               |
+| **Hallazgo origen** | Operación 2026-05-07 evening: backfill manual reveló blind spot del reconciler |
+| **ADRs afectados**  | ADR-006 (two-layer consistency) — añadir nota                                  |
+| **Invariantes**     | I-2 (idempotencia traceId)                                                     |
+
+#### Descripción
+
+Tras el fix de schema (PR #45) se descubrió que `classifyDrift` solo compara turns/cost/end del trace pero NO inspecciona si las `generations` internas tienen `calculatedTotalCost > 0`. Resultado: traces sincronizados pre-fix con shape antiguo (calculatedTotalCost=0) quedan permanentemente con coste 0 a menos que tengan otro drift detectable. Esto se detectó cuando el usuario reportó "solo veo costes desde 5-may" tras el fix.
+
+Solución one-shot ya aplicada (script `backfill-historical-traces.ts`). Esta tarea formaliza la detección estructural para que el reconciler periódico cubra el caso por sí solo en futuro.
+
+#### Archivos afectados
+
+- `shared/drift.ts` (añadir `COST_NOT_CALCULATED` al tipo `DriftStatus`)
+- `shared/drift.test.ts`
+- `scripts/reconcile-traces.ts` (consultar generation y verificar `calculatedTotalCost`)
+- `shared/langfuse-client.ts` (posible nuevo `getGenerationsForTrace`)
+- `tests/reconcile-traces.test.ts` (caso nuevo)
+- `docs/adr/ADR-006-two-layer-consistency.md` (nota sobre nueva clase de drift)
+
+#### DoR
+
+- [x] Archivos afectados listados
+- [x] Invariantes referenciados (I-2)
+- [x] ADRs (ADR-006 nota)
+- [x] Blast radius (MEDIUM — toca `shared/`)
+- [x] Criterio de done verificable por CI (test que crea generation con calculatedTotalCost=0 y verifica que reconciler lo detecta)
+- [x] Sin dependencias implícitas
+- [x] Toca `shared/` → revisado por humano antes de asignar
+
+#### DoD
+
+- [ ] Tipo `DriftStatus` extendido con `COST_NOT_CALCULATED`
+- [ ] `classifyDrift` consulta también la primera generation y verifica `calculatedTotalCost > 0` cuando `localCost > 0`
+- [ ] Test unitario cubre el nuevo caso
+- [ ] Test e2e: trace con shape v3 correcto pero generation sin pricing registrado → ¿qué hace? (decidir: skip, warn, o reparar)
+- [ ] Documentación en runbook: cómo distinguir el nuevo estado en logs
+- [ ] PR mergeado
+
+#### Riesgos
+
+- **Riesgo**: añadir consultas a generation por cada trace duplica el coste del reconciler. **Mitigación**: solo consultar generation si turns/cost coinciden (es decir, post-checks). O hacerlo solo en una pasada ad-hoc.
+- **Fuera de scope**: detectar drift en metadatos de generation (tags, modelos). Solo coste.
+
+---
+
 ## Reglas de paralelización del sprint
 
-Los 5 items son LOW + tocan archivos disjuntos:
+Los 6 items (5 LOW + 1 MEDIUM) tocan archivos disjuntos:
 
-| Item  | Archivos exclusivos                                                                                           |
-| ----- | ------------------------------------------------------------------------------------------------------------- |
-| S17-A | `shared/model-pricing.ts`, `shared/model-pricing.test.ts`                                                     |
-| S17-B | `docker/.env`, `docker/env.example`, `tests/litellm-m1-smoke.test.ts`, `docs/operations/runbook.md`           |
-| S17-C | `tests/cross-project-pricing.test.ts`                                                                         |
-| S17-D | `docs/adr/ADR-009-*.md`, `CLAUDE.md` (sección ADRs), `ARCHITECTURE.md`                                        |
-| S17-E | `CLAUDE.md` (sección invariantes), `ARCHITECTURE.md`, `docs/adr/ADR-011-*.md`, `tests/sdd-invariants.test.ts` |
+| Item  | Archivos exclusivos                                                                                                                                                                                     |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S17-A | `shared/model-pricing.ts`, `shared/model-pricing.test.ts`                                                                                                                                               |
+| S17-B | `docker/.env`, `docker/env.example`, `tests/litellm-m1-smoke.test.ts`, `docs/operations/runbook.md`                                                                                                     |
+| S17-C | `tests/cross-project-pricing.test.ts`                                                                                                                                                                   |
+| S17-D | `docs/adr/ADR-009-*.md`, `CLAUDE.md` (sección ADRs), `ARCHITECTURE.md`                                                                                                                                  |
+| S17-E | `CLAUDE.md` (sección invariantes), `ARCHITECTURE.md`, `docs/adr/ADR-011-*.md`, `tests/sdd-invariants.test.ts`                                                                                           |
+| S17-F | `shared/drift.ts`, `shared/drift.test.ts`, `scripts/reconcile-traces.ts`, `shared/langfuse-client.ts`, `tests/reconcile-traces.test.ts`, `docs/adr/ADR-006-two-layer-consistency.md` (nota, no rewrite) |
 
-**Conflicto detectado**: S17-D y S17-E ambos tocan `CLAUDE.md` y `ARCHITECTURE.md`. **No paralelizables entre sí.** Estrategia:
+**Conflictos detectados**:
 
-1. Ejecutar S17-A, S17-B, S17-C en paralelo (3 agentes simultáneos, archivos disjuntos)
+- S17-D y S17-E ambos tocan `CLAUDE.md` y `ARCHITECTURE.md`. **No paralelizables entre sí**.
+- S17-F toca `shared/drift.ts` y `scripts/reconcile-traces.ts`. Disjunto del resto, paralelizable.
+
+**Estrategia de ejecución**:
+
+1. Ejecutar S17-A, S17-B, S17-C, S17-F en paralelo (4 agentes, archivos disjuntos) — todos LOW excepto S17-F que es MEDIUM
 2. Ejecutar S17-D secuencial (toca `CLAUDE.md`)
 3. Ejecutar S17-E secuencial después de S17-D (también toca `CLAUDE.md`)
 
-Wall-clock estimado: 1 día paralelo + 1 día secuencial S17-D + 1 día secuencial S17-E = 3 días humano de review high-quality. Cabe en la semana con buffer.
+Wall-clock estimado: 1.5 días paralelo (S17-F arrastra al ser MEDIUM) + 1 día secuencial S17-D + 1 día secuencial S17-E = 3.5 días review. Cabe en la semana con buffer reducido.
 
 ## Trigger automático de RFC
 
@@ -337,11 +397,11 @@ _Se completan al cerrar el sprint (domingo 18-may)_
 
 | Métrica                                    | Target | Real |
 | ------------------------------------------ | ------ | ---- |
-| Items planificados                         | 5      | _-_  |
-| Items completados                          | 5      | _-_  |
+| Items planificados                         | 6      | _-_  |
+| Items completados                          | 6      | _-_  |
 | Items pospuestos                           | 0      | _-_  |
-| PRs mergeados                              | 5      | _-_  |
-| Tests añadidos                             | ≥4     | _-_  |
+| PRs mergeados                              | 6      | _-_  |
+| Tests añadidos                             | ≥6     | _-_  |
 | ADRs nuevos                                | 2      | _-_  |
 | RFCs creados                               | 0      | _-_  |
 | Spikes ejecutados                          | 0      | _-_  |
