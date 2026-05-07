@@ -28,6 +28,7 @@ import { classifyDrift, type DriftStatus } from "../shared/drift";
 import { emitDegradation } from "../shared/degradation";
 import {
   getTrace as langfuseGetTrace,
+  getGenerationsForTrace as langfuseGetGenerationsForTrace,
   type LangfuseTrace,
 } from "../shared/langfuse-client";
 import { discoverRecentJsonls } from "../shared/jsonl-discovery";
@@ -77,6 +78,15 @@ async function getTrace(id: string): Promise<LangfuseTrace | null> {
     return await langfuseGetTrace(id, { host: HOST });
   } catch (err) {
     emitDegradation("getTrace:fetch", err);
+    return null;
+  }
+}
+
+async function getGenerationCost(traceId: string): Promise<number | null> {
+  try {
+    return await langfuseGetGenerationsForTrace(traceId, { host: HOST });
+  } catch (err) {
+    emitDegradation("getGenerationCost:fetch", err);
     return null;
   }
 }
@@ -193,7 +203,16 @@ async function main() {
 
     const remote = await getTrace(tid);
     const localForDrift = { ...local, end: local.end ?? null };
-    const status = classifyDrift(localForDrift, remote);
+    let status = classifyDrift(localForDrift, remote);
+
+    // If metadata drift is absent but local cost is non-trivial, check whether
+    // Langfuse actually computed costs for the generations. A $0 generation sum
+    // while local cost > COST_EPSILON means the SDK did not calculate costs —
+    // re-uploading the trace forces recalculation.
+    if (status === "OK" && local.totalCost > 0.01) {
+      const genCost = await getGenerationCost(tid);
+      status = classifyDrift(localForDrift, remote, genCost);
+    }
 
     if (status === "OK") continue;
 

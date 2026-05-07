@@ -163,6 +163,35 @@ export async function listTraces(
 }
 
 /**
+ * GET /api/public/observations?traceId=…&type=GENERATION — sum calculatedTotalCost
+ * across all generation observations for the trace. Returns null on any error
+ * so callers can degrade gracefully without failing the reconciler loop.
+ */
+export async function getGenerationsForTrace(
+  traceId: string,
+  override?: Partial<LangfuseConfig>,
+): Promise<number | null> {
+  const cfg = buildConfig(override);
+  const qs = new URLSearchParams({
+    traceId,
+    type: "GENERATION",
+    limit: "50",
+  });
+  try {
+    const res = await request<{
+      data: Array<{ calculatedTotalCost?: number | null }>;
+    }>(`/api/public/observations?${qs.toString()}`, { method: "GET" }, cfg);
+    let total = 0;
+    for (const obs of res.data) {
+      total += obs.calculatedTotalCost ?? 0;
+    }
+    return total;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * POST /api/public/scores — attach a score (NUMERIC, CATEGORICAL, or BOOLEAN).
  * Scores are the canonical Langfuse annotation mechanism — prefer over
  * metadata patches, which would require a separate ingestion event.

@@ -5,11 +5,13 @@ export type DriftStatus =
   | "MISSING"
   | "TURNS_DRIFT"
   | "COST_DRIFT"
+  | "COST_NOT_CALCULATED"
   | "END_DRIFT";
 
 export function classifyDrift(
   local: { turns: number; totalCost: number; end: string | null | undefined },
   remote: { metadata?: Record<string, unknown> | null } | null,
+  generationCost?: number | null,
 ): DriftStatus {
   if (!remote) return "MISSING";
   const meta = remote.metadata ?? null;
@@ -24,5 +26,12 @@ export function classifyDrift(
   if (Math.abs((rCost ?? 0) - local.totalCost) > COST_EPSILON)
     return "COST_DRIFT";
   if (rEnd !== local.end) return "END_DRIFT";
+  if (
+    local.totalCost > COST_EPSILON &&
+    generationCost !== null &&
+    generationCost !== undefined &&
+    generationCost < COST_EPSILON
+  )
+    return "COST_NOT_CALCULATED";
   return "OK";
 }

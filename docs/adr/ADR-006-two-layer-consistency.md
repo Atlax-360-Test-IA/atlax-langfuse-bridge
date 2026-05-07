@@ -194,3 +194,26 @@ bajo. Para escalas mayores (cientos+ de devs), reconsiderar.
 - Cron units: `docs/systemd/`
 - Tests: `tests/langfuse-sync-http.test.ts`, `tests/reconcile-replay.test.ts`
 - Sprint inicial PR #1
+
+## Nota 2026-05-07 — extensión COST_NOT_CALCULATED
+
+Se añadió un nuevo estado de drift `COST_NOT_CALCULATED` (I-14 context, Sprint 17-F).
+Detecta el caso donde el reconciler ve `status = "OK"` en metadatos pero las
+generations en Langfuse tienen `calculatedTotalCost = 0` mientras la sesión local
+tiene coste > COST_EPSILON. Esto ocurre cuando el SDK de Langfuse no calculó los
+costes al ingestar (race condition en ClickHouse o modelo no reconocido en catálogo).
+
+**Flujo ampliado del reconciler:**
+
+1. Clasificación inicial con `classifyDrift(local, remote)` — sin generationCost.
+2. Si `status === "OK"` y `local.totalCost > COST_EPSILON`: fetch a
+   `GET /api/public/observations?traceId=…&type=GENERATION&limit=50`.
+3. Suma de `calculatedTotalCost` de las observations → `getGenerationCost`.
+4. Segunda clasificación con `classifyDrift(local, remote, genCost)`.
+5. Si `COST_NOT_CALCULATED`: re-ejecuta el hook para forzar re-ingesta.
+
+El fetch extra es condicional (solo en sesiones con coste local no trivial) y
+degrada gracefully (`null` si el endpoint falla → status permanece `"OK"`).
+
+- Implementado en: `shared/drift.ts` + `shared/langfuse-client.ts:getGenerationsForTrace` + `scripts/reconcile-traces.ts`
+- Tests: `shared/drift.test.ts` (bloque `COST_NOT_CALCULATED`)

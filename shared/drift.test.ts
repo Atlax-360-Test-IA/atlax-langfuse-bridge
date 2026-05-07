@@ -64,3 +64,38 @@ describe("classifyDrift (shared/drift)", () => {
     expect(result).toBe("MISSING");
   });
 });
+
+describe("classifyDrift — COST_NOT_CALCULATED (generationCost param)", () => {
+  const matchedRemote = remote(5, 0.05);
+  const localWithCost = local(5, 0.05);
+  const localZeroCost = local(5, 0);
+
+  test("returns COST_NOT_CALCULATED when local cost > epsilon and generationCost is 0", () => {
+    expect(classifyDrift(localWithCost, matchedRemote, 0)).toBe(
+      "COST_NOT_CALCULATED",
+    );
+  });
+
+  test("returns OK when generationCost is also positive (costs match)", () => {
+    expect(classifyDrift(localWithCost, matchedRemote, 0.05)).toBe("OK");
+  });
+
+  test("returns OK when local cost is 0 (no cost to miss)", () => {
+    // remote cost matches local (both 0) → no COST_DRIFT, no COST_NOT_CALCULATED
+    const zeroRemote = remote(5, 0);
+    expect(classifyDrift(localZeroCost, zeroRemote, 0)).toBe("OK");
+  });
+
+  test("returns OK when generationCost is null (API unavailable — degrade gracefully)", () => {
+    expect(classifyDrift(localWithCost, matchedRemote, null)).toBe("OK");
+  });
+
+  test("returns OK when generationCost is undefined (param omitted — backward compat)", () => {
+    expect(classifyDrift(localWithCost, matchedRemote)).toBe("OK");
+  });
+
+  test("TURNS_DRIFT takes priority over COST_NOT_CALCULATED", () => {
+    const turnsMismatch = remote(4, 0.05);
+    expect(classifyDrift(localWithCost, turnsMismatch, 0)).toBe("TURNS_DRIFT");
+  });
+});
