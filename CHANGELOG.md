@@ -38,6 +38,13 @@ Semver retroactivo. Política:
 
 - ADR-008 documentando límites de recuperabilidad y lecciones del incidente 22-Apr-2026
 
+### Ops (Sprint 24 — 2026-05-07) · CIERRE v1
+
+- **S24-A**: `README.md` reescrito para v1 — Quick Start actualizado (hook + piloto LiteLLM), tabla de qué se registra, comandos esenciales, limitaciones conocidas, estructura del repo, árbol `docs/` completo. Versión: v1.0 / 776 tests.
+- **S24-B**: `docs/operations/pilot-report-v1.md` — reporte de cierre con métricas del piloto: 8/8 sprints completados, 31/33 items (S21-B bloqueado por dep humana, S23-C no aplica), bridge-health `status:ok`, reconciler 100% tasa de reparación, 0 devs en piloto LiteLLM (gap de adopción: script listo, faltan voluntarios).
+- **S24-C**: `docs/roadmap/post-v1-backlog.md` — 8 items POST-V1 priorizados (ALTA: upgrade LiteLLM, distribuir hook 13 devs, onboarding piloto; MEDIA: multi-IDE, multi-vendor, dashboard→Langfuse; BAJA: cobertura reconciler, scope review automatizado).
+- **S24-D**: `~/work/atlax-observatorios/scope-reviews/scope-review-2026-05.md` — scope review mayo 2026: 3 reclasificaciones (ADR-009 y I-6 promovidos a `applicable`; Key Decisions dashboard promovidos a ADR pending).
+
 ### Ops (Sprint 23 — 2026-05-07)
 
 - **S23-A**: spike `docs/spikes/S23-A-bridge-http-viability.md` — análisis exhaustivo de si `atlax-claude-dashboard` necesita lectura HTTP del bridge. Hallazgo clave: el dashboard es 100% independiente (Anthropic Admin API → Postgres propio, 0 referencias al bridge/Langfuse en su código). No existe demanda actual.
