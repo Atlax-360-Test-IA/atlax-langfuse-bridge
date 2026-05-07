@@ -5,7 +5,7 @@ global `~/.claude/CLAUDE.md`.
 
 > 📖 **Arquitectura completa**: ver [`ARCHITECTURE.md`](./ARCHITECTURE.md) — SDD §1-§14.
 > 🛠️ **Operación día-a-día**: ver [`docs/operations/runbook.md`](./docs/operations/runbook.md).
-> 📋 **Decisiones formales**: ver [`docs/adr/`](./docs/adr/) (ADR-001..ADR-007).
+> 📋 **Decisiones formales**: ver [`docs/adr/`](./docs/adr/) (ADR-001..ADR-009, ADR-011).
 > 📜 **Cambios**: ver [`CHANGELOG.md`](./CHANGELOG.md).
 
 Este archivo solo contiene **instrucciones operativas para Claude Code en
@@ -130,6 +130,34 @@ máquina del dev — nunca van a Cloud Run.
 sistema y se queda local. Esto se valida en `tests/cloud-run-boundary.test.ts`.
 
 Razones detalladas y target topology PRO en [ADR-002](./docs/adr/ADR-002-edge-core-split.md).
+
+### I-14 · Límites operativos del paralelismo agéntico
+
+Formalizado a partir del experimento del 2026-05-07
+(`docs/experiments/2026-05-07-parallel-subagent-experiment.md`).
+
+**Reglas:**
+
+- **N≤5 agentes read-only** por tanda. Si se necesitan más, dividir en dos tandas con síntesis intermedia.
+- **N≤3 agentes write** simultáneos, solo con archivos completamente disjuntos.
+- **Doble-check obligatorio**: verificar toda sugerencia de código de subagente contra la fuente primaria (docs oficiales, spec, código existente) antes de aplicar. Sin doble-check, no aceptar output de subagente en `shared/` ni contratos de API.
+- **Nunca dos agentes en el mismo archivo**: race condition garantizada → secuencial obligatorio.
+- **Síntesis siempre en el orquestador**: los subagentes devuelven resultados, el orquestador decide.
+
+**Blast Radius Matrix por sprint** (aplicar antes de paralelizar):
+
+- **LOW**: archivos completamente disjuntos → paralelo sin restricciones
+- **MEDIUM**: comparten módulo `shared/` o fichero de config → máx. N=2, revisión humana
+- **HIGH**: mismo archivo o contrato de API → secuencial obligatorio
+
+**Por qué**: el experimento mostró speedup real de 2-4× con N≤5, pero un subagente
+(A4) sugirió un schema incorrecto que el orquestador detectó mediante doble-check.
+Sin esa verificación, la regresión hubiera llegado a producción.
+
+**Código de referencia**: `docs/experiments/2026-05-07-parallel-subagent-experiment.md`
+**Scope**: `all` (aplica a todos los proyectos Atlax con desarrollo centaur)
+
+Ver [ADR-011](./docs/adr/ADR-011-parallel-subagent-limits.md) para decisión formal y contexto completo.
 
 ## Comandos de operación
 
