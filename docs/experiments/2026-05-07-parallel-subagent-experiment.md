@@ -220,3 +220,152 @@ Convergencia entre predicción de literatura y observación empírica = el dato 
 - **Fuentes externas estables**: WebFetch a docs públicos rara vez falla. Si los agentes consultaran APIs internas con rate limiting agresivo, los resultados podrían diferir.
 - **Sin medición de calidad por revisor humano externo**: la auto-evaluación tiene sesgo. Idealmente un humano externo evaluaría los outputs de cada agente.
 - **Comparación contra "secuencial estimado" es teórica**: no corrí los mismos agentes secuencialmente. La suma de duraciones es el mejor proxy disponible pero podría sobreestimar (un humano experto haría la misma síntesis en menos tiempo).
+
+## 10. Lote 2 — Validación cruzada con N=3 agentes (planning sprint)
+
+Tras el lote inicial (7 agentes, research) ejecuté un segundo lote más pequeño para investigar buenas prácticas de planning, mapear el dashboard hermano, y traducir hallazgos en items de roadmap. Datos:
+
+| Lote | Agentes | Wall-clock | Suma secuencial | Speedup |
+| ---- | ------- | ---------- | --------------- | ------- |
+| 1    | 7       | 270 s      | 1,282 s         | 4.75×   |
+| 2    | 3       | 249 s      | 544 s           | 2.18×   |
+
+**Hallazgo metodológico**: el speedup **escala sublinealmente** con el número de agentes. Con 3 agentes el speedup es 2×, no 3×. Con 7 fue ~5×, no 7×. La ganancia marginal por agente añadido decrece — confirma la predicción de literatura y refuerza el límite de 5-7 como techo razonable.
+
+**Hallazgo cualitativo**: con N=3 los outputs fueron **más fáciles de sintetizar** que con N=7. La fricción de integrar 3 documentos largos es menor que integrar 7. Si el objetivo es calidad de síntesis (no speedup máximo), N=3-4 puede ser óptimo en muchos casos.
+
+## 11. Buenas prácticas adicionales para planning agéntico
+
+Investigación independiente (agente "BP") arrojó 6 prácticas SOTA. Tras filtro crítico del orquestador, **adopto 4, dejo 1 condicional, descarto 1**:
+
+### 11.1 Adoptadas (aplicables hoy)
+
+#### BP-1 · Definition of Ready estructurado para items "agent-shaped"
+
+Ningún item se asigna a paralelización agéntica sin pasar el siguiente checklist:
+
+```markdown
+## DoR checklist
+
+- [ ] Archivos afectados listados explícitamente (sin wildcards)
+- [ ] Invariantes relevantes (I-N) referenciados
+- [ ] ADRs que aplican referenciados (o "ninguno aplica")
+- [ ] Blast radius clasificado: LOW / MEDIUM / HIGH
+- [ ] Criterio de done verificable por CI (test que falla hoy y pasa al terminar)
+- [ ] Sin dependencias implícitas con otro item del mismo sprint
+- [ ] Si toca shared/: aprobación explícita del humano antes de asignar
+```
+
+**Justificación**: el doble-check de hoy (caso A4 con schema erróneo) demostró que sin DoR el paralelismo amplifica errores. La fricción de mantener el checklist es <5 min/item, evita varios bugs por sprint.
+
+#### BP-2 · Blast Radius Matrix como gate de paralelización
+
+| Blast Radius | Determinante                                             | Paralelización máx. | Review                         |
+| ------------ | -------------------------------------------------------- | ------------------- | ------------------------------ |
+| LOW          | Solo tests, docs, ficheros aislados, sin `shared/`       | 5-7 agentes         | CI aprueba solo                |
+| MEDIUM       | Toca 1 módulo compartido, sin migración de schema        | 2-3 agentes         | Humano revisa diff             |
+| HIGH         | Migración de schema, cambio de invariante I-N, nuevo ADR | 1 agente + humano   | Doble-check obligatorio (BP-4) |
+
+**Aplicación**: cada item en `docs/roadmap/sprint-NN-*.md` lleva campo `blast: LOW|MEDIUM|HIGH` obligatorio. Items HIGH siempre van al inicio del sprint con el humano. Coincide con regla global de "Executing actions with care".
+
+#### BP-3 · Spike como item de primera clase con timebox de 1 día
+
+**Disparadores** (cualquiera convierte un item en spike obligatorio):
+
+- Existen 2+ opciones técnicas válidas sin criterio claro
+- Implementación requeriría leer >3 ficheros de docs externas
+- Error de diseño costaría >1 sprint de refactor
+- Toca una API externa nunca usada en el proyecto
+
+**Output del spike**: documento de 1 página en `docs/spikes/spike-NNN.md` con: pregunta, opciones evaluadas, opción elegida, razón de descarte de las otras. Si el spike resulta en decisión arquitectónica, se promueve a ADR.
+
+**Timebox no negociable**: 1 día centaur (8h). Si en 1 día no hay respuesta, el item se descompone o escala.
+
+#### BP-4 · Doble-check obligatorio contra fuente primaria
+
+Esta práctica **emerge directamente del experimento de hoy** (caso A4): cuando un subagente sugiere un cambio sobre formatos de API/schemas/IDs, el orquestador **debe** verificar contra fuente primaria (docs oficiales, código fuente upstream) antes de implementar.
+
+**Operacionalización**:
+
+- Al recibir output de un agente con sugerencia de schema/API/identificador, hacer 1 WebFetch o `gh api` directo a la fuente.
+- No copiar literal el output sin verificación.
+- Tiempo añadido: 30-60s por verificación. Coste de no hacerlo: bug en producción.
+
+Esta práctica **es innegociable**. Su omisión hoy habría roto el fix de coste.
+
+### 11.2 Adoptada con condicional
+
+#### BP-5 · RFC ligero (1 página) con umbral objetivo
+
+**Activador automático** (cualquiera dispara RFC):
+
+- El item toca ≥2 módulos en `shared/`
+- Cambia un contrato de API (request/response shape)
+- Requiere un nuevo invariante I-N
+- Afecta a la arquitectura edge/core (I-13)
+
+**Formato** en `docs/rfcs/RFC-NNN.md` (≤1 página):
+
+```markdown
+# RFC-NNN · Título
+
+**Fecha:** YYYY-MM-DD | **Status:** Draft → Accepted | **Autor:** X
+
+## Problema (1 párrafo)
+
+## Opciones consideradas (tabla pro/contra)
+
+## Decisión + razón
+
+## Consecuencias (ADRs, invariantes, tests)
+```
+
+**Diferencia con ADR**: RFC es **pre-decisión** (abierto a comentarios), ADR es **post-decisión** (formalizado). Complementarios.
+
+**Condicional**: NO creo `docs/rfcs/` proactivamente hoy. Se crea **cuando el primer item dispare el activador**. Evita overhead prematuro.
+
+### 11.3 Pospuesta
+
+#### BP-6 · Sizing con C×R (Complexity × Review load)
+
+Reemplazar story points por dos dimensiones:
+
+- **Complexity (C)**: 1-3, contexto que necesita el agente
+- **Review load (R)**: 1-3, tiempo humano de revisión
+
+Sprint capacity = horas humanas de review (no de implementación). Centaur con 1 humano + N agentes ≈ 10h/semana review high-quality.
+
+**Por qué pospuesta**: requiere calibración de 2-3 sprints. La uso de manera informal en Sprint 17-19 (sizing S/M/L) y formalizo en Sprint 20+ con datos reales.
+
+### 11.4 Descartada / ya tenemos
+
+- **Multi-stream fan-out/fan-in patterns**: ya capturado por nuestro patrón "5-7 read-only / 2-3 write". LangGraph no aplica (no usamos).
+- **Daily standups en contexto centaur**: literatura no muestra valor añadido. Cadencia natural del sprint suficiente.
+- **Risk register formal**: overhead. El campo `blast:` + sección "risks" en RFC cubren el riesgo.
+
+## 12. Trazabilidad bidireccional research → ADR → PR
+
+Práctica adoptada (BP-7 en mi numeración interna). Patrón:
+
+```
+hallazgo-de-research (este doc, sesión X)
+  └── docs/spikes/spike-NNN.md  (si aplica)
+       └── docs/rfcs/RFC-NNN.md  (si aplica)
+            └── docs/adr/ADR-NNN.md  ←→  PR #NN
+                                          └── tests/adr-coverage.test.ts
+```
+
+**Operacionalización mínima**:
+
+- Template de PR (`.github/PULL_REQUEST_TEMPLATE.md` si existe, o convención manual): añadir campo `Related ADR/RFC: ADR-NNN / RFC-NNN / none`.
+- Cada ADR añade campo `Implemented in: PR #NN`.
+- Test `tests/sdd-links.test.ts` ya existe — extender para verificar que cada ADR Accepted tenga al menos un PR referenciado.
+
+## 13. Decisiones pendientes de validar (futuro experimento)
+
+1. **¿Speedup con write coordinado en worktrees?** — META lo predice 1.5-2× con 2-3 agentes. No probado aún.
+2. **¿N óptimo para síntesis de calidad?** — hoy hipótesis: 3-4 para outputs largos, 5-7 para outputs cortos.
+3. **¿Coste de oportunidad de NO paralelizar?** — un agente único haciendo todo en serie podría producir mejor síntesis interna a coste de wall-clock. No medido.
+4. **¿Variación con Opus 4.7 como orquestador?** — todo este experimento usó Sonnet 4.6. Opus 4.7 podría manejar más outputs paralelos.
+
+Estas hipótesis irán a `docs/experiments/` cuando se prueben con experimentos diseñados.
