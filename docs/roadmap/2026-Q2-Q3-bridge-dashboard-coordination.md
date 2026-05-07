@@ -237,11 +237,11 @@ El spike da respuesta. El RFC formaliza. La implementación (si procede) va en S
 ### Items
 
 | ID    | Título                                                             | Size | Blast | Hallazgo origen | Deps                   |
-| ----- | ------------------------------------------------------------------ | ---- | ----- | --------------- | ---------------------- |
-| S24-A | README v1: documentación cara a usuarios externos                  | M    | LOW   | meta            | _todos los anteriores_ |
-| S24-B | Métricas piloto medidas + reporte stakeholders                     | M    | LOW   | GAP O-6         | S22-D                  |
-| S24-C | Backlog POST-V1 priorizado (multi-IDE, multi-vendor, multi-perfil) | S    | LOW   | scope expansion | none                   |
-| S24-D | Scope review mensual mayo (regla global)                           | S    | LOW   | GAP O-7         | none                   |
+| ----- | ------------------------------------------------------------------ | ---- | ----- | --------------- | ---------------------- | ------------- |
+| S24-A | README v1: documentación cara a usuarios externos                  | M    | LOW   | meta            | _todos los anteriores_ | ✅ 2026-05-07 |
+| S24-B | Métricas piloto medidas + reporte stakeholders                     | M    | LOW   | GAP O-6         | S22-D                  | ✅ 2026-05-07 |
+| S24-C | Backlog POST-V1 priorizado (multi-IDE, multi-vendor, multi-perfil) | S    | LOW   | scope expansion | none                   | ✅ 2026-05-07 |
+| S24-D | Scope review mensual mayo (regla global)                           | S    | LOW   | GAP O-7         | none                   | ✅ 2026-05-07 |
 
 ---
 
