@@ -121,6 +121,7 @@ atlax-langfuse-bridge/
 │   ├── provision-keys.ts             # Provisiona virtual keys LiteLLM [admin]
 │   ├── smoke-mcp-e2e.ts              # E2E test CI-runnable [CI]
 │   ├── smoke-litellm-langfuse.ts     # E2E LiteLLM gateway [CI]
+│   ├── pilot-onboarding.sh           # Onboarding devs piloto (--litellm-mode, --dry-run) [edge]
 │   └── statusline.sh                 # Statusline → detect-tier [edge]
 │
 ├── shared/                           [biblioteca pura, importable de edge y core]
@@ -160,7 +161,10 @@ atlax-langfuse-bridge/
 │
 ├── docs/
 │   ├── adr/                          # 9 ADRs Michael Nygard (ADR-001..ADR-009, ADR-011)
-│   ├── operations/runbook.md         # Runbook operativo
+│   ├── operations/
+│   │   ├── runbook.md                # Runbook operativo
+│   │   ├── litellm-onboarding.md     # Guía onboarding devs piloto (S21-A)
+│   │   └── pilot-kpis.md            # KPIs formales del piloto + exit criteria (S21-D)
 │   └── systemd/                      # User units Linux/WSL del reconciler
 │
 ├── setup/                            [edge installers]
@@ -424,12 +428,13 @@ Ver `infra/backup-story.md` para detalle de backup story (RPO ≤ 1 min).
 
 ### Pirámide de tests
 
-| Capa                 | Ficheros clave                                                                                      | Cobertura                                                                |
-| -------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| **Unitarios**        | `tests/*.test.ts`, `shared/*.test.ts`, `scripts/*.test.ts`, `browser-extension/src/*.test.js`       | Todos los módulos                                                        |
-| **Cross-validation** | `tests/cross-validation.test.ts`                                                                    | Invariantes entre módulos (pricing, drift, tier)                         |
-| **E2E CI-runnable**  | `tests/langfuse-sync-http.test.ts`, `tests/reconcile-replay.test.ts`, `tests/bridge-health.test.ts` | Hook HTTP + reconciler DRY_RUN + bridge-health trace con Bun.serve mocks |
-| **ADR ejecutable**   | `tests/cloud-run-boundary.test.ts`                                                                  | Verifica I-13 estructuralmente (17 tests)                                |
+| Capa                 | Ficheros clave                                                                                      | Cobertura                                                                              |
+| -------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Unitarios**        | `tests/*.test.ts`, `shared/*.test.ts`, `scripts/*.test.ts`, `browser-extension/src/*.test.js`       | Todos los módulos                                                                      |
+| **Cross-validation** | `tests/cross-validation.test.ts`                                                                    | Invariantes entre módulos (pricing, drift, tier)                                       |
+| **E2E CI-runnable**  | `tests/langfuse-sync-http.test.ts`, `tests/reconcile-replay.test.ts`, `tests/bridge-health.test.ts` | Hook HTTP + reconciler DRY_RUN + bridge-health trace con Bun.serve mocks               |
+| **Smoke LiteLLM**    | `tests/litellm-m3-virtual-keys.test.ts`                                                             | S20-A/B/C: /key/generate, budget enforcement, atribución Langfuse (skip si no gateway) |
+| **ADR ejecutable**   | `tests/cloud-run-boundary.test.ts`                                                                  | Verifica I-13 estructuralmente (17 tests)                                              |
 
 ### Mapeo invariante → fichero de test
 
