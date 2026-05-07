@@ -27,10 +27,10 @@ describe("extension pricing mirrors shared/model-pricing.ts", () => {
 // ─── getPricing ──────────────────────────────────────────────────────────────
 
 describe("getPricing", () => {
-  test("matches by substring (claude-opus-4-7 → claude-opus-4)", () => {
-    expect(getPricing("claude-opus-4-7")).toEqual(
-      MODEL_PRICING["claude-opus-4"],
-    );
+  test("Opus 4.7 usa el pricing nuevo $5/$25 (no el legacy $15/$75)", () => {
+    const p = getPricing("claude-opus-4-7");
+    expect(p.input).toBe(5);
+    expect(p.output).toBe(25);
   });
 
   test("matches sonnet variants", () => {
@@ -58,9 +58,17 @@ describe("getPricing", () => {
 // ─── estimateCost ────────────────────────────────────────────────────────────
 
 describe("estimateCost", () => {
-  test("computes opus cost correctly", () => {
-    // 1M input + 1M output @ opus = 15 + 75 = 90
+  test("computes opus 4.7 cost correctly (nuevo pricing $5/$25)", () => {
+    // 1M input + 1M output @ opus 4.7 = 5 + 25 = 30
     expect(estimateCost("claude-opus-4-7", 1_000_000, 1_000_000)).toBeCloseTo(
+      30,
+      6,
+    );
+  });
+
+  test("computes opus 4.1 cost correctly (legacy pricing $15/$75)", () => {
+    // 1M input + 1M output @ opus 4.1 = 15 + 75 = 90
+    expect(estimateCost("claude-opus-4-1", 1_000_000, 1_000_000)).toBeCloseTo(
       90,
       6,
     );

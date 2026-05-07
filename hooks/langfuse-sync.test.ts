@@ -25,7 +25,7 @@ describe("calcCost", () => {
     expect(cost).toBeCloseTo(0.01128, 5);
   });
 
-  test("computes cost for opus usage", () => {
+  test("computes cost for opus 4.7 usage (pricing nuevo $5/$25)", () => {
     const cost = calcCost(
       {
         input_tokens: 3000,
@@ -34,6 +34,21 @@ describe("calcCost", () => {
         cache_read_input_tokens: 0,
       },
       "claude-opus-4-7",
+    );
+    // (3000*5 + 500*6.25 + 0*0.5 + 2000*25) / 1_000_000
+    // = (15000 + 3125 + 0 + 50000) / 1_000_000 = 0.068125
+    expect(cost).toBeCloseTo(0.068125, 5);
+  });
+
+  test("computes cost for opus 4.1 usage (pricing legacy $15/$75)", () => {
+    const cost = calcCost(
+      {
+        input_tokens: 3000,
+        output_tokens: 2000,
+        cache_creation_input_tokens: 500,
+        cache_read_input_tokens: 0,
+      },
+      "claude-opus-4-1",
     );
     // (3000*15 + 500*18.75 + 0*1.5 + 2000*75) / 1_000_000
     expect(cost).toBeCloseTo(0.204375, 5);
