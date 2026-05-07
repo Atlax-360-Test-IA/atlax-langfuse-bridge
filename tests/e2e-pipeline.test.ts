@@ -69,22 +69,21 @@ function buildBatch(
         traceId,
         name: model,
         model,
-        usage: {
+        usageDetails: {
           input: usage.inputTokens,
           output: usage.outputTokens,
+          cache_read_input_tokens: usage.cacheReadTokens,
+          cache_creation_input_tokens: usage.cacheCreationTokens,
           total:
             usage.inputTokens +
             usage.outputTokens +
             usage.cacheCreationTokens +
             usage.cacheReadTokens,
-          unit: "TOKENS",
         },
         costDetails: {
-          estimatedUSD: Number(usage.cost.toFixed(6)),
+          total: Number(usage.cost.toFixed(8)),
         },
         metadata: {
-          cacheCreationTokens: usage.cacheCreationTokens,
-          cacheReadTokens: usage.cacheReadTokens,
           serviceTier: usage.serviceTier,
           turns: usage.turns,
         },
@@ -173,24 +172,22 @@ describe("E2E pipeline: JSONL → Langfuse batch", () => {
   test("generation usage tokens are positive integers", () => {
     for (const gen of batch.generations) {
       const body = gen["body"] as Record<string, unknown>;
-      const usage = body["usage"] as Record<string, unknown>;
+      const usage = body["usageDetails"] as Record<string, unknown>;
       expect(usage["input"]).toBeGreaterThan(0);
       expect(usage["output"]).toBeGreaterThan(0);
       expect(usage["total"]).toBeGreaterThan(0);
-      expect(usage["unit"]).toBe("TOKENS");
     }
   });
 
   test("total tokens = input + output + cache tokens", () => {
     for (const gen of batch.generations) {
       const body = gen["body"] as Record<string, unknown>;
-      const usage = body["usage"] as Record<string, unknown>;
-      const meta = body["metadata"] as Record<string, unknown>;
+      const usage = body["usageDetails"] as Record<string, unknown>;
       const expectedTotal =
         (usage["input"] as number) +
         (usage["output"] as number) +
-        (meta["cacheCreationTokens"] as number) +
-        (meta["cacheReadTokens"] as number);
+        (usage["cache_creation_input_tokens"] as number) +
+        (usage["cache_read_input_tokens"] as number);
       expect(usage["total"]).toBe(expectedTotal);
     }
   });
@@ -212,7 +209,7 @@ describe("E2E pipeline: JSONL → Langfuse batch", () => {
     for (const gen of batch.generations) {
       const genBody = gen["body"] as Record<string, unknown>;
       const costDetails = genBody["costDetails"] as Record<string, unknown>;
-      genTotal += costDetails["estimatedUSD"] as number;
+      genTotal += costDetails["total"] as number;
     }
 
     expect(genTotal).toBeCloseTo(traceCost, 5);
@@ -264,7 +261,7 @@ describe("E2E edge cases (I-3: cwd from first entry)", () => {
         (g["body"] as Record<string, unknown>)["model"] === "claude-sonnet-4-6",
     );
     const sonnetBody = sonnet!["body"] as Record<string, unknown>;
-    const sonnetUsage = sonnetBody["usage"] as Record<string, unknown>;
+    const sonnetUsage = sonnetBody["usageDetails"] as Record<string, unknown>;
     // Aggregated: 100+300 = 400 input, 50+150 = 200 output
     expect(sonnetUsage["input"]).toBe(400);
     expect(sonnetUsage["output"]).toBe(200);

@@ -355,6 +355,7 @@ async function main(): Promise<void> {
   // One generation per model
   for (const [model, usage] of agg.models) {
     const safeModelId = model.replace(/[^a-z0-9-]/gi, "-");
+    const pricing = getPricing(model);
     batch.push({
       id: randomUUID(),
       type: "generation-create",
@@ -364,22 +365,38 @@ async function main(): Promise<void> {
         traceId,
         name: model,
         model,
-        usage: {
+        usageDetails: {
           input: usage.inputTokens,
           output: usage.outputTokens,
+          cache_read_input_tokens: usage.cacheReadTokens,
+          cache_creation_input_tokens: usage.cacheCreationTokens,
           total:
             usage.inputTokens +
             usage.outputTokens +
             usage.cacheCreationTokens +
             usage.cacheReadTokens,
-          unit: "TOKENS",
         },
         costDetails: {
-          estimatedUSD: Number(usage.cost.toFixed(6)),
+          input: Number(
+            ((usage.inputTokens * pricing.input) / 1_000_000).toFixed(8),
+          ),
+          output: Number(
+            ((usage.outputTokens * pricing.output) / 1_000_000).toFixed(8),
+          ),
+          cache_read_input_tokens: Number(
+            ((usage.cacheReadTokens * pricing.cacheRead) / 1_000_000).toFixed(
+              8,
+            ),
+          ),
+          cache_creation_input_tokens: Number(
+            (
+              (usage.cacheCreationTokens * pricing.cacheWrite) /
+              1_000_000
+            ).toFixed(8),
+          ),
+          total: Number(usage.cost.toFixed(8)),
         },
         metadata: {
-          cacheCreationTokens: usage.cacheCreationTokens,
-          cacheReadTokens: usage.cacheReadTokens,
           serviceTier: usage.serviceTier,
           billingTier,
           turns: usage.turns,
