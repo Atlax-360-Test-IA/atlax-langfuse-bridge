@@ -192,11 +192,11 @@ S18-A dispara RFC porque toca contrato nuevo de API outbound. **Crear `docs/rfcs
 ### Items
 
 | ID    | Título                                                     | Size | Blast  | Hallazgo origen | Deps         |
-| ----- | ---------------------------------------------------------- | ---- | ------ | --------------- | ------------ |
-| S22-A | Tag `source:reconciler` en traces emitidos por reconciler  | S    | LOW    | GAP O-4         | none         |
-| S22-B | Métricas del propio bridge (degradation events) → Langfuse | M    | MEDIUM | GAP O-3         | none         |
-| S22-C | Audit deps `bun-types` + `typescript`                      | S    | LOW    | GAP O-2         | none         |
-| S22-D | Dashboard Langfuse documentado: KPIs piloto + salud bridge | M    | LOW    | GAP H2-C / O-6  | S22-A, S22-B |
+| ----- | ---------------------------------------------------------- | ---- | ------ | --------------- | ------------ | ------------- |
+| S22-A | Tag `source:reconciler` en traces emitidos por reconciler  | S    | LOW    | GAP O-4         | none         | ✅ PR #56     |
+| S22-B | Métricas del propio bridge (degradation events) → Langfuse | M    | MEDIUM | GAP O-3         | none         | ✅ PR #57     |
+| S22-C | Audit deps `bun-types` + `typescript`                      | S    | LOW    | GAP O-2         | none         | ✅ 2026-05-07 |
+| S22-D | Dashboard Langfuse documentado: KPIs piloto + salud bridge | M    | LOW    | GAP H2-C / O-6  | S22-A, S22-B | ✅ 2026-05-07 |
 
 ### Notas
 
