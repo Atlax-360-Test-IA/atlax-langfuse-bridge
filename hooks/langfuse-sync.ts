@@ -302,8 +302,13 @@ async function main(): Promise<void> {
   const now = new Date().toISOString();
   // Use real session timestamps for trace/generation ordering in Langfuse.
   // Falls back to `now` only if the JSONL had no timestamps at all.
-  const traceTimestamp = sessionStart ?? now;
-  const generationTimestamp = sessionEnd ?? now;
+  // LANGFUSE_FORCE_NOW_TIMESTAMP=1 overrides session timestamps with `now`,
+  // required during backfill operations: ClickHouse uses ReplacingMergeTree
+  // keyed by event_ts, so replaying older sessions with their original
+  // session timestamps would lose against any subsequent live-hook event.
+  const forceNowTs = process.env["LANGFUSE_FORCE_NOW_TIMESTAMP"] === "1";
+  const traceTimestamp = forceNowTs ? now : (sessionStart ?? now);
+  const generationTimestamp = forceNowTs ? now : (sessionEnd ?? now);
   const traceId = `cc-${session_id}`;
 
   // ── Build Langfuse batch ──
