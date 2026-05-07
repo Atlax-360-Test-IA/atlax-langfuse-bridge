@@ -36,6 +36,14 @@ export function stopCleanupInterval(): void {
   clearInterval(cleanupInterval);
 }
 
+/** Ejecuta el cleanup de entradas expiradas — exportado solo para tests. */
+export function _runCleanup(): void {
+  const now = Date.now();
+  for (const [key, entry] of cache) {
+    if (now - entry.cachedAt > TTL_MS) cache.delete(key);
+  }
+}
+
 /**
  * Hash SHA256 canónico de un trace para clasificación de tier.
  * Conveniencia para el caso de uso original — los callers genéricos usan

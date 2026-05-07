@@ -1,5 +1,8 @@
-import { describe, expect, test } from "bun:test";
-import { aggregateLines } from "./aggregate";
+import { describe, expect, test, afterEach } from "bun:test";
+import { writeFileSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { aggregateLines, aggregate } from "./aggregate";
 
 // ─── Fixture lines (matches tests/fixtures/session.jsonl) ───────────────────
 
@@ -106,5 +109,46 @@ describe("aggregateLines", () => {
     ];
     const result = aggregateLines(lines);
     expect(result.cwd).toBe("/first/path");
+  });
+});
+
+// ─── aggregate() — filesystem wrapper ────────────────────────────────────────
+
+describe("aggregate() — filesystem wrapper", () => {
+  let tmpDir: string;
+
+  afterEach(() => {
+    if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test("reads file and delegates to aggregateLines", () => {
+    tmpDir = mkdtempSync(join(tmpdir(), "agg-fs-test-"));
+    const path = join(tmpDir, "session.jsonl");
+    writeFileSync(
+      path,
+      [
+        '{"type":"summary","timestamp":"2026-01-01T00:00:00.000Z","cwd":"/tmp/proj"}',
+        '{"type":"assistant","timestamp":"2026-01-01T00:01:00.000Z","message":{"role":"assistant","model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":50}}}',
+        '{"type":"result","timestamp":"2026-01-01T00:02:00.000Z"}',
+      ].join("\n") + "\n",
+    );
+    const result = aggregate(path);
+    expect(result.turns).toBe(1);
+    expect(result.start).toBe("2026-01-01T00:00:00.000Z");
+    expect(result.end).toBe("2026-01-01T00:02:00.000Z");
+    expect(result.cwd).toBe("/tmp/proj");
+  });
+
+  test("returns empty result for empty file", () => {
+    tmpDir = mkdtempSync(join(tmpdir(), "agg-fs-empty-"));
+    const path = join(tmpDir, "empty.jsonl");
+    writeFileSync(path, "");
+    const result = aggregate(path);
+    expect(result.turns).toBe(0);
+    expect(result.totalCost).toBe(0);
+  });
+
+  test("throws on non-existent file", () => {
+    expect(() => aggregate("/tmp/nonexistent-agg-test-file.jsonl")).toThrow();
   });
 });

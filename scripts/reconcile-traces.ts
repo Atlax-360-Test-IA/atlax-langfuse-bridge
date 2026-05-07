@@ -73,7 +73,7 @@ function log(
 
 // ─── Langfuse fetch ──────────────────────────────────────────────────────────
 
-async function getTrace(id: string): Promise<LangfuseTrace | null> {
+export async function getTrace(id: string): Promise<LangfuseTrace | null> {
   try {
     return await langfuseGetTrace(id, { host: HOST });
   } catch (err) {
@@ -82,7 +82,9 @@ async function getTrace(id: string): Promise<LangfuseTrace | null> {
   }
 }
 
-async function getGenerationCost(traceId: string): Promise<number | null> {
+export async function getGenerationCost(
+  traceId: string,
+): Promise<number | null> {
   try {
     return await langfuseGetGenerationsForTrace(traceId, { host: HOST });
   } catch (err) {
