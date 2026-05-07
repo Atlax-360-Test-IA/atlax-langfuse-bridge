@@ -16,6 +16,7 @@
 - [Browser extension — diagnóstico](#browser-extension--diagnóstico)
 - [Rollback de Langfuse](#rollback-de-langfuse)
 - [Actualizar el hook en máquinas dev](#actualizar-el-hook-en-máquinas-dev)
+- [Reconciliación de coste contra Anthropic Admin API (S18-B/D)](#reconciliación-de-coste-contra-anthropic-admin-api-s18-bd)
 - [Actualizar pricing tras nuevo modelo Anthropic](#actualizar-pricing-tras-nuevo-modelo-anthropic)
 
 ---
@@ -397,6 +398,52 @@ no las duplica.
 git checkout <commit-anterior> -- hooks/langfuse-sync.ts
 bash setup/setup.sh
 ```
+
+---
+
+## Reconciliación de coste contra Anthropic Admin API (S18-B/D)
+
+El reconciler puede comparar el coste estimado local contra el coste real
+facturado por Anthropic. Se activa con la variable opcional `ANTHROPIC_ADMIN_API_KEY`.
+
+### Setup
+
+1. Crear Admin API key en `https://console.anthropic.com/settings/admin-keys` (requiere rol `admin` en la organización; no confundir con la API key estándar).
+2. La key debe empezar por `sk-ant-admin*`. Las keys estándar (`sk-ant-api*`) reciben 404 en `/v1/organizations/*`.
+3. Añadir a `~/.atlax-ai/reconcile.env` (modo 600):
+   ```bash
+   ANTHROPIC_ADMIN_API_KEY=sk-ant-admin01-...
+   ```
+
+### Comportamiento
+
+Tras el scan habitual, si la key está set, el reconciler:
+
+1. Acumula coste estimado por familia de modelo (`familyKey()` normaliza
+   `claude-haiku-4-5-20251001` → `claude-haiku-4-5`).
+2. Llama `GET /v1/organizations/cost_report` con rango UTC day-aligned.
+3. Suma el coste real por modelo, normaliza con `familyKey` y compara.
+4. Emite `cost-comparison` (info) con la tabla. Si la divergencia por modelo
+   supera `COST_DIVERGENCE_THRESHOLD` (default 5%), emite `cost-divergence-detected` (warn).
+5. Caso especial **seat-only**: si todas las filas tienen `realUSD: 0` mientras
+   `estimatedUSD > 0`, emite un único `cost-comparison-seat-only` (info) — esto es
+   esperado cuando todo el tráfico es OAuth/seats Premium (no facturados vía API).
+
+### Filtros de ruido
+
+- Filas con `< $0.10` en ambos lados se ignoran (ratios poco fiables).
+- Threshold ajustable: `COST_DIVERGENCE_THRESHOLD=0.10` para 10%.
+
+### Limitaciones documentadas
+
+- **No hay granularidad de sesión.** El cost_report agrega por modelo + día.
+  La señal sirve solo como verificación sistémica, no per-sesión.
+- **Seats Premium no aparecen** en el cost_report. Es la condición operativa
+  esperada para Atlax actualmente.
+- El endpoint `usage_report/claude_code` agrega por usuario+día pero también
+  está vacío para seats Premium (verificado empíricamente 2026-05-07).
+
+Ver [RFC-001](../rfcs/RFC-001-anthropic-admin-api-cost-report.md) para el análisis completo.
 
 ---
 

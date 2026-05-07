@@ -1,6 +1,6 @@
 # RFC-001 · Integración Anthropic Admin API — cost_report en el reconciler
 
-- **Status**: Draft
+- **Status**: Accepted (decisión: Opción A — comparación workspace/día, NO per-sesión)
 - **Fecha**: 2026-05-07
 - **Autor**: jgcalvo
 - **Scope**: atlax-langfuse-bridge
@@ -137,16 +137,30 @@ pero no para atribuir coste exacto a una sesión individual.
 
 ---
 
-## Decisión requerida
+## Decisión tomada (2026-05-07)
 
-> **¿Obtener `ANTHROPIC_ADMIN_API_KEY` para el bridge?**
->
-> - **Sí** → S18-B se implementa como comparación workspace-day (no sesión). Requiere que
->   jgcalvo solicite/proporcione la key. Tiempo estimado adicional: +0.5d.
-> - **No / diferir** → S18-B se omite en Sprint 18. S18-C y S18-D se implementan con lógica
->   basada en estimación local. Sprint se reduce de M+S+S a S+S.
+**Resolución**: Opción A implementada. `ANTHROPIC_ADMIN_API_KEY` obtenida.
 
-**Fecha límite de decisión**: inicio de S18-B (≈ 20-may-2026).
+**Path real del endpoint** (corregido vs. la suposición inicial del RFC):
+
+- `GET /v1/organizations/cost_report` (no `/v1/usage`)
+- `GET /v1/organizations/me` (validación)
+- `GET /v1/organizations/usage_report/claude_code` (analytics — devuelve vacío para seats Premium)
+
+**Granularidad real verificada empíricamente** (2026-05-07):
+
+- Por **modelo** + **día UTC** + workspace + service_tier
+- NO incluye `session_id` ni `user_email`
+- Solo aparece tráfico **API key** — los seats Premium (OAuth) NO se facturan vía API y no aparecen
+
+**Implementación en bridge**:
+
+- `shared/anthropic-admin-client.ts` — cliente REST mínimo con timeout 30s
+- `scripts/reconcile-traces.ts` — pasada post-scan que compara coste estimado por modelo (familyKey-normalizado) vs. cost_report y emite log estructurado
+- Caso "seat-only" detectado y manejado como `info`, no `warn` (escenario operativo normal en Atlax)
+- Threshold de divergencia configurable vía `COST_DIVERGENCE_THRESHOLD` (default 5%)
+
+**Aprendizaje clave**: el cost_report SÍ es útil aunque no haya granularidad de sesión. Permite detectar drift sistémico cuando hay **mezcla** de tráfico API + seats. Si todo es seat, el bridge lo reporta explícitamente y no genera ruido.
 
 ---
 
