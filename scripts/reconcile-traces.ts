@@ -229,6 +229,13 @@ async function reconcileCostAgainstAnthropic(
     report = await getCostReport({
       startingAt: range.startingAt,
       endingAt: range.endingAt,
+      // CRITICAL: without `group_by[]=description`, every result row comes
+      // back with `model: null`, sumCostByModel() then puts everything into
+      // "__non_token__", and the reconciler filters that out. The result is
+      // that the cost-comparison loop runs over an empty map, isSeatOnlyScenario
+      // returns false (no rows), and the divergence check is silently bypassed.
+      // Discovered via post-v1 validation 2026-05-08.
+      groupBy: ["description"],
     });
   } catch (err) {
     emitDegradation("reconcile:cost-report-fetch", err);

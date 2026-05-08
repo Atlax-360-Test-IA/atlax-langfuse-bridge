@@ -23,6 +23,11 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 export interface AnthropicAdminConfig {
   apiKey: string;
   timeoutMs?: number;
+  /**
+   * Base URL override (test-only). In production always defaults to
+   * https://api.anthropic.com. Reads from `ANTHROPIC_ADMIN_API_BASE` if set.
+   */
+  baseUrl?: string;
 }
 
 export interface OrganizationInfo {
@@ -80,9 +85,14 @@ function resolveConfig(
       "[anthropic-admin-client] La key proporcionada no parece Admin API key (debe empezar por 'sk-ant-admin'). Las keys estándar (sk-ant-api*) no tienen acceso a /v1/organizations/*",
     );
   }
+  const baseUrl =
+    override?.baseUrl ??
+    process.env["ANTHROPIC_ADMIN_API_BASE"] ??
+    ANTHROPIC_API_BASE;
   return {
     apiKey,
     timeoutMs: override?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    baseUrl,
   };
 }
 
@@ -90,7 +100,8 @@ async function adminRequest<T>(
   path: string,
   cfg: AnthropicAdminConfig,
 ): Promise<T> {
-  const url = `${ANTHROPIC_API_BASE}${path}`;
+  const base = cfg.baseUrl ?? ANTHROPIC_API_BASE;
+  const url = `${base}${path}`;
   const res = await fetch(url, {
     method: "GET",
     headers: {
