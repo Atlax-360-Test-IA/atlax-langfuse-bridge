@@ -100,4 +100,4 @@ Las razones en orden de peso:
 
 > **No implementar** servidor HTTP en el bridge (v1 ni near-term). Si el dashboard necesita datos de sesión granulares (post-v1), la vía es `dashboard → Langfuse API`, no `dashboard → bridge HTTP`.
 
-Ver RFC-002 para la decisión formalizada y el ADR-012 referenciado.
+Ver RFC-002 para la decisión formalizada (no se crea ADR — la decisión "no implementar" no requiere uno; un ADR se crearía solo si en el futuro la decisión cambia a "implementar").

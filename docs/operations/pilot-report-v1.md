@@ -9,9 +9,9 @@
 
 | Métrica                  | Valor             |
 | ------------------------ | ----------------- |
-| Tests en suite           | 776               |
-| Assertions (expects)     | 1402              |
-| Ficheros de test         | 49                |
+| Tests en suite           | 816               |
+| Assertions (expects)     | 1470              |
+| Ficheros de test         | 51                |
 | Tests fallando           | 0                 |
 | ADRs formalizados        | 11 (ADR-001..011) |
 | RFCs publicados          | 2 (RFC-001, -002) |
@@ -133,6 +133,7 @@ humana (no técnica). S23-C es consecuencia directa de la decisión del RFC-002.
 | Post Sprint 18 (cost_report)       | 729   | —       |
 | Post Sprint 20-22 (LiteLLM+bridge) | 750   | 1370    |
 | Post Sprint 23-24 + fix PR #61     | 776   | 1402    |
+| Post auditoría 360º (PR #65 + #66) | 816   | 1470    |
 
 ---
 

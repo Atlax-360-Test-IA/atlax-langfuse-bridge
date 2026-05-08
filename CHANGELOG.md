@@ -38,6 +38,31 @@ Semver retroactivo. Política:
 
 - ADR-008 documentando límites de recuperabilidad y lecciones del incidente 22-Apr-2026
 
+### PR Audit-3 — Coherencia documental + reglas globales (2026-05-08)
+
+Cierra los items de Nivel 4 de la auditoría 360º y formaliza los patrones detectados como reglas reusables — separadas por scope.
+
+DOCS DRIFT (Nivel 4)
+
+- **D1**: `pilot-report-v1.md` métricas actualizadas a 816/1470/51.
+- **D4**: `ORGANIZATION.md` corregido `I-1..I-13` → `I-1..I-14`.
+- **D7**: `S23-A.md` referencia a "ADR-012" inexistente reemplazada por nota explicativa (RFC-002 decide "no implementar", no se crea ADR).
+- **D8**: `ARCHITECTURE.md §11` actualizada con estado real de PBI #3 (`hooks/pre-tool-use-guard.sh` ya implementado, 21 tests, activo en settings).
+- **D10**: typo `atlas360` → `atlax360` en `ARCHITECTURE.md`.
+- **D11**: README/ARCHITECTURE/CHANGELOG sincronizan números de tests (816, 1470, 51 ficheros).
+
+REGLAS GLOBALES (`~/.claude/rules/`)
+
+- `security.md` extendido: path confinement helper, Docker bind 127.0.0.1, credentials a archivo 600 (no shell rc), no loguear key prefixes, eval prohibido en bash, sanitizar inputs de pipes, NaN guards en env vars, validación constants en `shared/`, bound de longitud en regex.
+- `testing.md` extendido: subprocess coverage gap awareness, doble cobertura unit + E2E, tests E2E invocan script real (no helper), `process.env` restore por clave (patrón I-12), `os.homedir()` inmutable en runtime de Bun, aserciones específicas (`toBeCloseTo` para floats), polling con backoff vs sleeps hardcoded, concurrency tests para mutexes.
+- `cross-project-patterns.md` extendido: ToolContext.signal/stepBudgetMs es contrato, errores tipados sobre string-match (`LangfuseNotFoundError`), `.toSorted()` sobre `.sort()` (ES2023, requiere `lib: ES2023` en tsconfig).
+
+REGLAS DE PROYECTO (`CLAUDE.md`)
+
+- Sección "Convenciones específicas (post-auditoría 360º 2026-05-08)" añadida con los 4 patrones específicos del bridge: backfill env vars, SAFE_SID_RE desde shared/, safeFilePath() para transcript_path, comentarios `// I-N` en código.
+
+Tests: 816 / 0 fail / 1470 expects.
+
 ### PR Audit-2 — Hardening + calidad (2026-05-08)
 
 Items Nivel 2-3 de la auditoría 360º. Sin afectar comportamiento, propaga reglas
