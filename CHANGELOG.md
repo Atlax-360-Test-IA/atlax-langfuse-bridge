@@ -38,6 +38,32 @@ Semver retroactivo. Política:
 
 - ADR-008 documentando límites de recuperabilidad y lecciones del incidente 22-Apr-2026
 
+### Auditoría post-recovery (2026-05-08)
+
+Modo auditoría tras recovery del crash de CC. Validación cruzada del estado real del sistema vs los artefactos commiteados.
+
+HALLAZGOS REALES
+
+- `/tmp/atlax-validation/validate-consistency.ts` se perdió al reiniciar WSL (no estaba commiteado al repo). **Recreado** en `scripts/validate-consistency.ts` (~270 líneas vs 700 originales, más conciso). Verificado funcional contra el sistema vivo: 3 OK / 1 TURNS_DRIFT esperado en sesión activa, bridge-health `status:ok`, cost reconciliation con `group_by[]=description` operativo.
+- `fw-deny-rfc1918-default` añadida a `infra/provision-pro.sh` — rule defense-in-depth recomendada por agente Cloud Run topology que faltaba. Prioridad 1100 (deny EGRESS a 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 desde tag `langfuse-egress`). Las allows específicas (1000-1020) tienen prioridad menor y siguen funcionando.
+- LiteLLM container sigue `unhealthy` en runtime aunque el fix de PR #68 está mergeado — el container actual fue arrancado ANTES del merge y el healthcheck nuevo solo aplica al recrear con `docker compose up -d`. Operación pendiente, no bug.
+
+FALSO POSITIVO DESCARTADO
+
+- "Bridge-health no se actualiza" diagnosticado inicialmente como bug de upsert. **NO era bug**: Langfuse v3 ingestion pipeline tiene latencia ~12-15s (API→Redis→Worker→ClickHouse). Consulté el trace 2s tras enviar y vi datos viejos. Tras esperar 12s, el upsert sí aplicó: tags UNION, metadata last-write-wins, timestamp actualizado. ADR-003 sigue siendo correcto.
+- Lección persistida en `feedback_langfuse_v3_ingestion_latency.md` (memoria proyecto): "Esperar mínimo 15s antes de afirmar que un upsert no funcionó". Test confirmatorio reproducible documentado.
+
+VALIDACIÓN CRUZADA EJECUTADA
+
+- Suite completa: **818/0 fail / 1475 expects** (post-recovery)
+- Tests E2E aislados: 30/30 verde (`langfuse-sync-http`, `reconcile-replay`, `bridge-health`, `cost-reconciliation`)
+- Tests integración: 110/110 verde (`concurrency`, `cross-validation`, `sprint16-coverage`, `anthropic-admin-client`, `langfuse-client`)
+- Reconciler dry-run en producción: cost-divergence-detected emitiendo warnings reales con datos Anthropic ($14k+ Sonnet 4.6, $560 Haiku 4.5, $0 Opus 4.7 = seat-only)
+- bridge-health trace `repaired:2 failed:0 status:ok` confirmado tras esperar pipeline
+
+ARTEFACTOS DE LA SESIÓN ANTERIOR
+Verificada integridad de todos los outputs de subagentes previos: ADR-012 (148 líneas), plan despliegue (861 líneas), `cloud-run.yaml` (11 cambios), `provision-pro.sh` (467 líneas, syntax OK). Conocimiento valioso de los agentes 100% persistido a disco antes del crash. Logs operativos brutos perdidos pero irrelevantes para continuidad.
+
 ### PRO Deployment Plan — Decisión arquitectónica + plan formal (2026-05-08)
 
 Tras la validación intensiva del Paso 2, se diseña el despliegue PRO en Cloud Run europe-west1. Investigación exhaustiva con 2 agentes paralelos contra fuentes oficiales (ClickHouse Cloud, Aiven, GCE pricing, Langfuse self-hosting docs).
