@@ -160,7 +160,7 @@ atlax-langfuse-bridge/
 │   └── backup-story.md               # Cloud SQL PITR + ClickHouse + GCS
 │
 ├── docs/
-│   ├── adr/                          # 11 ADRs Michael Nygard (ADR-001..ADR-011)
+│   ├── adr/                          # 12 ADRs Michael Nygard (ADR-001..ADR-012)
 │   ├── operations/
 │   │   ├── runbook.md                # Runbook operativo
 │   │   ├── litellm-onboarding.md     # Guía onboarding devs piloto (S21-A)

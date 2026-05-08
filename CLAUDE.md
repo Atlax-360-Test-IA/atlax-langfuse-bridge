@@ -5,7 +5,7 @@ global `~/.claude/CLAUDE.md`.
 
 > 📖 **Arquitectura completa**: ver [`ARCHITECTURE.md`](./ARCHITECTURE.md) — SDD §1-§14.
 > 🛠️ **Operación día-a-día**: ver [`docs/operations/runbook.md`](./docs/operations/runbook.md).
-> 📋 **Decisiones formales**: ver [`docs/adr/`](./docs/adr/) (ADR-001..ADR-011).
+> 📋 **Decisiones formales**: ver [`docs/adr/`](./docs/adr/) (ADR-001..ADR-012).
 > 📜 **Cambios**: ver [`CHANGELOG.md`](./CHANGELOG.md).
 
 Este archivo solo contiene **instrucciones operativas para Claude Code en
