@@ -34,6 +34,10 @@ export function buildTurnBatch(turn, userId) {
     "entrypoint:claude-ai",
     `tier:${turn.platform === "app" ? "claude-app" : "claude-web"}`,
     "tier-source:browser-extension",
+    // Match the hook (langfuse-sync.ts) and reconciler (reconcile-traces.ts)
+    // tag convention so dashboard queries grouping by cost-source see all
+    // surfaces consistently.
+    "cost-source:estimated",
   ];
 
   return [
@@ -61,7 +65,10 @@ export function buildTurnBatch(turn, userId) {
       type: "generation-create",
       timestamp: now,
       body: {
-        id: `${traceId}-${now}`,
+        // Use crypto.randomUUID() instead of `${traceId}-${now}` to avoid
+        // millisecond collisions in automated/burst scenarios. Langfuse
+        // dedups by ID — collisions silently drop generations.
+        id: `${traceId}-${crypto.randomUUID()}`,
         traceId,
         name: turn.model ?? "claude-web",
         model: turn.model ?? "unknown",

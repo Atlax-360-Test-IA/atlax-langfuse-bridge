@@ -164,7 +164,9 @@ describe("compareCostByModel", () => {
     const real = new Map([["claude-opus-4-7", 90]]);
     const rows = compareCostByModel(est, real, 0.05, 0.01);
     // |100 - 90| / max(100, 90) = 10/100 = 0.10 → 10%
-    expect(rows[0]!.divergencePct).toBe(0.1);
+    // Use toBeCloseTo for computed floats — exact equality is fragile under
+    // float arithmetic precision (10/100 may round-trip as 0.10000000000001).
+    expect(rows[0]!.divergencePct).toBeCloseTo(0.1, 10);
     expect(rows[0]!.exceedsThreshold).toBe(true);
   });
 

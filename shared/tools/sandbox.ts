@@ -175,9 +175,9 @@ export function withSandbox<TInput, TOutput>(
  * registry: `listToolsForAgent(agent).map(withSandbox)` — cada tool respeta
  * el modo activo del entorno.
  */
-export function withSandboxAll<T extends AgentTool<any, any>>(
-  tools: T[],
+export function withSandboxAll<T extends AgentTool<unknown, unknown>>(
+  tools: readonly T[],
   modeOverride?: SandboxMode,
-): Array<AgentTool<any, any>> {
+): Array<AgentTool<unknown, unknown>> {
   return tools.map((t) => withSandbox(t, modeOverride));
 }

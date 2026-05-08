@@ -12,6 +12,7 @@ import { calcCost, getBillingTier } from "../hooks/langfuse-sync";
 import { detectTier } from "../scripts/detect-tier";
 import { getPricing } from "../shared/model-pricing";
 import { emitDegradation as sharedEmit } from "../shared/degradation";
+import { traceHash } from "../shared/hash-cache";
 // hookEmit was a re-export of sharedEmit — now imported directly from source
 const hookEmit = sharedEmit;
 
@@ -197,7 +198,6 @@ describe("tier detection consistency — api-direct path", () => {
 
 describe("hash-cache ↔ queryLangfuseTrace cache key stability", () => {
   test("traceHash is stable across multiple calls with same input", () => {
-    const { traceHash } = require("../shared/hash-cache");
     const h1 = traceHash(
       "sess-abc",
       ["claude-sonnet-4-6", "claude-opus-4-7"],
@@ -212,7 +212,6 @@ describe("hash-cache ↔ queryLangfuseTrace cache key stability", () => {
   });
 
   test("different sessions produce different hash (no collision)", () => {
-    const { traceHash } = require("../shared/hash-cache");
     const sessions = ["sess-001", "sess-002", "sess-003"];
     const hashes = sessions.map((s) =>
       traceHash(s, ["claude-sonnet-4-6"], 5000),

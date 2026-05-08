@@ -86,10 +86,16 @@ function propertyToZod(
       throw new Error(
         "[zod-adapter] nested object properties not supported yet",
       );
-    default:
+    default: {
+      // Exhaustiveness check on `prop.type`. If a new variant is added to
+      // JsonSchemaProperty["type"], TypeScript will fail this `never` assertion
+      // and force adding a case above. The runtime throw is defense-in-depth
+      // for inputs that bypass the type checker (e.g. JSON parsed at runtime).
+      const _exhaustive: never = prop.type;
       throw new Error(
-        `[zod-adapter] unknown property type: ${(prop as any).type}`,
+        `[zod-adapter] unknown property type: ${JSON.stringify(_exhaustive)}`,
       );
+    }
   }
   if (!required) {
     schema = (schema as { optional: () => unknown }).optional();

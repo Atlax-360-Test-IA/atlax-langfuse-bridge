@@ -42,7 +42,24 @@ function resolveAgentType(): AgentType {
 }
 
 const AGENT_TYPE: AgentType = resolveAgentType();
-const STEP_BUDGET_MS = Number(process.env["MCP_STEP_BUDGET_MS"] ?? "10000");
+
+// MCP_STEP_BUDGET_MS — budget per-tool-execution. NaN guard prevents
+// AbortSignal.timeout(NaN) RangeError downstream once ToolContext.signal
+// is wired (see langfuse-client composeSignal).
+const _rawBudget = Number(process.env["MCP_STEP_BUDGET_MS"] ?? "10000");
+if (!Number.isFinite(_rawBudget) || _rawBudget <= 0) {
+  process.stderr.write(
+    `[mcp-server] MCP_STEP_BUDGET_MS inválido: ${process.env["MCP_STEP_BUDGET_MS"]}\n`,
+  );
+  process.exit(1);
+}
+const STEP_BUDGET_MS = _rawBudget;
+
+// MAX_LINE_BYTES — protects the JSON-RPC stdin parser against OOM. A client
+// sending a 100MB line without `\n` would otherwise grow the buffer until
+// the OS kills the process. 1MB is well above any realistic JSON-RPC payload.
+const MAX_LINE_BYTES = 1_048_576;
+
 const SERVER_NAME = "atlax-langfuse-bridge";
 const SERVER_VERSION = "0.1.0";
 const PROTOCOL_VERSION = "2024-11-05"; // MCP spec version
@@ -211,6 +228,16 @@ export async function runServer(): Promise<void> {
   let buffer = "";
   for await (const chunk of process.stdin) {
     buffer += (chunk as Buffer).toString("utf-8");
+    // Defense against OOM: if a client sends a single line larger than
+    // MAX_LINE_BYTES without a newline, abort instead of growing the buffer
+    // until the OS kills us. A 1MB line is well above any sane JSON-RPC payload.
+    if (buffer.length > MAX_LINE_BYTES) {
+      logErr(
+        `line buffer exceeded ${MAX_LINE_BYTES} bytes — closing connection`,
+      );
+      sendError(null, -32700, "Line too long (exceeds MAX_LINE_BYTES)");
+      return;
+    }
     let nl: number;
     while ((nl = buffer.indexOf("\n")) >= 0) {
       const line = buffer.slice(0, nl).trim();

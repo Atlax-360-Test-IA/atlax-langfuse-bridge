@@ -257,24 +257,34 @@ describe("S20-B · budget enforcement → 400 budget_exceeded", () => {
     if (!LITELLM_MASTER_KEY) return void expect(true).toBe(true);
     if (!reachable || !budgetKey) return void expect(true).toBe(true);
 
-    // Esperar a que el spend se actualice en BD (enforcement asíncrono)
-    await new Promise((r) => setTimeout(r, 2_000));
+    // LiteLLM applies budget enforcement asynchronously after the first call.
+    // Poll with exponential backoff (250ms, 500ms, 1s, 2s, 4s — capped at 8s
+    // total) until we get a 400 budget_exceeded, instead of a flaky fixed sleep.
+    let res!: Response;
+    let lastStatus = 0;
+    let delayMs = 250;
+    const deadline = Date.now() + 8_000;
+    while (Date.now() < deadline) {
+      res = await fetch(`${LITELLM_BASE_URL}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${budgetKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "anthropic/claude-haiku-4-5-20251001",
+          messages: [{ role: "user", content: "ping" }],
+          max_tokens: 3,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      lastStatus = res.status;
+      if (res.status === 400) break;
+      await new Promise((r) => setTimeout(r, delayMs));
+      delayMs = Math.min(delayMs * 2, 4_000);
+    }
 
-    const res = await fetch(`${LITELLM_BASE_URL}/v1/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${budgetKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "anthropic/claude-haiku-4-5-20251001",
-        messages: [{ role: "user", content: "ping" }],
-        max_tokens: 3,
-      }),
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    expect(res.status).toBe(400);
+    expect(lastStatus).toBe(400);
     const body = (await res.json()) as {
       error?: { type?: string; message?: string };
     };

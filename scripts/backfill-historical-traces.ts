@@ -30,9 +30,22 @@ import { spawn } from "node:child_process";
 import { aggregate } from "../shared/aggregate";
 import { emitDegradation } from "../shared/degradation";
 import { discoverRecentJsonls } from "../shared/jsonl-discovery";
+import { SAFE_SID_RE } from "../shared/validation";
 
 const DRY_RUN = process.env["DRY_RUN"] === "1";
-const THROTTLE_MS = Number(process.env["THROTTLE_MS"] ?? "200");
+
+// THROTTLE_MS — delay between hook replays. NaN guard: setTimeout(fn, NaN)
+// fires immediately (spec: NaN → 0), which would silently DROP throttling
+// and produce a request storm against Langfuse during backfill.
+const _rawThrottle = Number(process.env["THROTTLE_MS"] ?? "200");
+if (!Number.isFinite(_rawThrottle) || _rawThrottle < 0) {
+  process.stderr.write(
+    `[backfill] THROTTLE_MS inválido: ${process.env["THROTTLE_MS"]}\n`,
+  );
+  process.exit(1);
+}
+const THROTTLE_MS = _rawThrottle;
+
 const WINDOW_HOURS = 8760; // 1 year — covers all historical data
 const HOOK_PATH = resolve(
   dirname(new URL(import.meta.url).pathname),
@@ -40,8 +53,6 @@ const HOOK_PATH = resolve(
   "hooks",
   "langfuse-sync.ts",
 );
-
-const SAFE_SID_RE = /^[0-9a-zA-Z_-]+$/;
 
 function log(
   level: "info" | "warn" | "error",

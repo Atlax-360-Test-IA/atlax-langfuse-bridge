@@ -166,6 +166,10 @@ describe("getDevIdentity", () => {
     const identity = getDevIdentity();
     expect(typeof identity).toBe("string");
     expect(identity.length).toBeGreaterThan(0);
+    // Defense against the literal string "undefined" leaking through —
+    // weakly-typed fallbacks elsewhere have produced this regression before.
+    expect(identity).not.toBe("undefined");
+    expect(identity).not.toBe("null");
   });
 });
 

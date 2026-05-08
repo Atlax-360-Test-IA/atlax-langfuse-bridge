@@ -174,6 +174,16 @@ export function readTierFile(): TierFile | null {
       );
       return null;
     }
+    // Validate `account` shape — must be string or null. A malformed value
+    // (object, array, number) would propagate to the trace metadata and
+    // corrupt downstream queries grouping by account.
+    if (raw["account"] !== null && typeof raw["account"] !== "string") {
+      emitDegradation(
+        "readTierFile:invalid-account",
+        new Error(`account must be string|null, got ${typeof raw["account"]}`),
+      );
+      return null;
+    }
     return raw as unknown as TierFile;
   } catch (err) {
     emitDegradation("readTierFile:read", err);
@@ -316,11 +326,13 @@ async function main(): Promise<void> {
 
   if (agg.models.size === 0) process.exit(0); // no billable usage
 
-  // Determine billing context
-  const costEntries = [...agg.models.values()];
+  // Determine billing context. `.toSorted()` (ES2023, Bun ≥1.0) returns a
+  // new array — avoids mutating a local that other readers of agg.models
+  // might depend on for stable ordering.
   const totalCost = agg.totalCost;
-  const dominantTier = costEntries.sort((a, b) => b.cost - a.cost)[0]
-    ?.serviceTier;
+  const dominantTier = [...agg.models.values()].toSorted(
+    (a, b) => b.cost - a.cost,
+  )[0]?.serviceTier;
   const billingTier = getBillingTier(dominantTier);
 
   const sessionStart = agg.start;

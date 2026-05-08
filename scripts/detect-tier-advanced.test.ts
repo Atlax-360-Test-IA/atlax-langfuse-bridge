@@ -6,7 +6,7 @@
 
 import { describe, expect, test, afterEach, spyOn } from "bun:test";
 import * as fs from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import {
   detectTier,
@@ -144,7 +144,7 @@ describe("labelFor", () => {
 // We operate on the real path with backup/restore to keep tests hermetic.
 
 describe("writeIfChanged", () => {
-  const ATLAX_DIR = join(require("node:os").homedir(), ".atlax-ai");
+  const ATLAX_DIR = join(homedir(), ".atlax-ai");
   const TIER_PATH = join(ATLAX_DIR, "tier.json");
   const BACKUP_PATH = join(ATLAX_DIR, "tier.json.test-bak");
 

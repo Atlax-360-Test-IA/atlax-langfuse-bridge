@@ -55,11 +55,16 @@ log()  { echo "[onboarding] $*"; }
 warn() { echo "[onboarding] ⚠️  $*" >&2; }
 ok()   { echo "[onboarding] ✓  $*"; }
 
+# run — execute a command, or print it in dry-run mode.
+# Avoids `eval "$*"` (vulnerable to glob/quoting tricks if any arg contains
+# unusual chars). Uses "$@" with explicit branch instead.
 run() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "[dry-run] $*"
+    printf '[dry-run]'
+    printf ' %q' "$@"
+    printf '\n'
   else
-    eval "$*"
+    "$@"
   fi
 }
 
@@ -116,7 +121,7 @@ step_prereqs() {
 
 step_atlax_dir() {
   log "Configurando ~/.atlax-ai/..."
-  run "mkdir -p '$ATLAX_DIR'"
+  run mkdir -p "$ATLAX_DIR"
 
   # Escribir bridge.env con las variables de Langfuse
   local env_file="$ATLAX_DIR/bridge.env"
@@ -148,7 +153,7 @@ EOF
 
 step_hook() {
   log "Registrando hook Stop en Claude Code..."
-  run "mkdir -p '$CLAUDE_SETTINGS_DIR'"
+  run mkdir -p "$CLAUDE_SETTINGS_DIR"
 
   local hook_cmd="bun run ${HOOK_PATH}"
 

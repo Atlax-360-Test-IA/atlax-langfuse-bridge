@@ -21,6 +21,7 @@ import {
 } from "../shared/langfuse-client";
 import { discoverRecentJsonls } from "../shared/jsonl-discovery";
 import { classifyDrift, type DriftStatus } from "../shared/drift";
+import { SAFE_SID_RE } from "../shared/validation";
 
 const HOST = (process.env["LANGFUSE_HOST"] ?? "http://localhost:3000").replace(
   /\/$/,
@@ -82,6 +83,12 @@ async function main() {
   const rows: Row[] = [];
   for (const p of paths) {
     const sid = (p.split("/").pop() ?? "").replace(/\.jsonl$/, "");
+    if (!SAFE_SID_RE.test(sid)) {
+      console.error(
+        `[skip] sid inválido (no matches SAFE_SID_RE): ${JSON.stringify(sid)}`,
+      );
+      continue;
+    }
     const tid = `cc-${sid}`;
     const local = aggregate(p);
     const remote = await getTrace(tid);
