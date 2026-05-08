@@ -195,6 +195,15 @@ Más comandos y diagnóstico en [`docs/operations/runbook.md`](./docs/operations
 - **No editar ADRs existentes**: son inmutables. Si una decisión cambia, crear
   ADR nuevo con `Status: Supersedes ADR-NNN` y marcar el viejo como `Superseded`.
 
+## Convenciones específicas (post-auditoría 360º 2026-05-08)
+
+Estas reglas surgen del audit de `~/.claude/projects/.../memory/project_audit_2026-05-08.md` y son específicas de la arquitectura de este bridge. Las reglas globales viven en `~/.claude/rules/security.md` y `~/.claude/rules/testing.md`.
+
+- **Backfill scripts inyectan `_invokedByReconciler:true` + `LANGFUSE_FORCE_NOW_TIMESTAMP=1`**. Sin ellos, ClickHouse `ReplacingMergeTree` (keyed por `event_ts`) puede sobrescribir traces buenos con valores históricos al reprocesar. El reconciler en línea ya lo hace; cualquier nuevo script de re-emisión también debe hacerlo. Patrón en `scripts/backfill-historical-traces.ts:replayHook()`.
+- **`SAFE_SID_RE` se importa desde `shared/validation.ts`, nunca se redefine localmente**. Bound de longitud `{1,128}` obligatorio. Cualquier path/ID derivado de filename de JSONL pasa por este regex antes de uso.
+- **`safeFilePath()` para `transcript_path` en hook + cualquier path de fuente externa**. Confinamiento a `~/.claude/projects/` por defecto. Override `ATLAX_TRANSCRIPT_ROOT_OVERRIDE` reservado SOLO para tests.
+- **Comentarios `// I-N` en código que implementa invariante** (trazabilidad). El test `tests/sdd-invariants.test.ts` verifica que cada I-N aparece en `ARCHITECTURE.md`; el patrón de comentar en código es complementario para que `grep "// I-N"` resuelva a la implementación.
+
 ## Mantenimiento del SDD
 
 Cuando hagas cambios en el código que toquen al SDD:

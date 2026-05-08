@@ -333,7 +333,7 @@ type VirtualKeysFile = {
 
 | Tag                    | Ejemplo                             | Fuente                                                                                   |
 | ---------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------- |
-| `project:owner/repo`   | `project:atlas360/harvest`          | `git remote get-url origin`                                                              |
+| `project:owner/repo`   | `project:atlax360/harvest`          | `git remote get-url origin`                                                              |
 | `billing:<tier>`       | `billing:anthropic-team-standard`   | Heurística sobre `service_tier` + `CLAUDE_CODE_USE_VERTEX`                               |
 | `tier:<tier>`          | `tier:seat-team`                    | `~/.atlax-ai/tier.json` (autoritativo, ver [ADR-004](./docs/adr/ADR-004-tier-system.md)) |
 | `tier-source:<source>` | `tier-source:credentials-exists`    | `~/.atlax-ai/tier.json`                                                                  |
@@ -425,7 +425,7 @@ Ver `infra/backup-story.md` para detalle de backup story (RPO ≤ 1 min).
 
 ## §10 · Testing
 
-**Estado actual**: 805 tests / 1450 expects / 50 ficheros / 0 fallos.
+**Estado actual**: 816 tests / 1470 expects / 51 ficheros / 0 fallos.
 
 ### Pirámide de tests
 
@@ -528,7 +528,7 @@ ventana_recuperable = min(cleanupPeriodDays × 24h, WINDOW_HOURS)
 - Systemd timer `atlax-langfuse-backup.timer` — diario 03:00, 7 diarios + 4 semanales
 - `cleanupPeriodDays: 90` documentado como prerequisito para devs del piloto
 - Restore drill verificado 28-Apr-2026 (Postgres OK, ClickHouse OK)
-- PBI #3 pendiente: hook PreToolUse que bloquea `docker compose down -v`
+- PBI #3 ✅ implementado (post-ADR-008): `hooks/pre-tool-use-guard.sh` bloquea `docker compose down -v`, `docker volume rm/prune`, `rm -rf` en directorios de datos protegidos, y `dropdb/DROP DATABASE langfuse`. 21 tests en `tests/pre-tool-use-guard.test.ts`. Activo en `~/.claude/settings.json`.
 
 ---
 
