@@ -38,6 +38,22 @@ Semver retroactivo. Política:
 
 - ADR-008 documentando límites de recuperabilidad y lecciones del incidente 22-Apr-2026
 
+### Fix Paso-2 — Bug crítico de cost reconciliation descubierto en validación (2026-05-08)
+
+Durante la validación funcional intensiva (Paso 2 post-auditoría) se descubrió un bug silencioso en `scripts/reconcile-traces.ts:reconcileCostAgainstAnthropic()`:
+
+**El problema**: el reconciler invocaba `getCostReport({ startingAt, endingAt })` sin `groupBy: ["description"]`. Sin ese parámetro, la API de Anthropic devuelve filas con `model: null`. `sumCostByModel()` rutea entonces todo el coste a `"__non_token__"` y el reconciler filtra explícitamente esa key (`if (k === "__non_token__") continue`). Resultado: el map de costes reales queda vacío, `compareCostByModel()` retorna `[]`, `isSeatOnlyScenario([])` retorna `false`, y la comparación de divergencia se SALTABA silenciosamente. Logs decían `cost-comparison-seat-only` cuando en realidad había $14,788 USD/semana de Sonnet 4.6 facturados vía API que el bridge nunca verificaba.
+
+**El fix**: añadir `groupBy: ["description"]` al call site. Con esto, las filas vienen con el campo `model` poblado y la comparación detecta divergencias reales.
+
+**Hallazgo derivado**: el bridge solo observa ~7% del tráfico API de la organización (jgcalvo via Claude Code), el resto son workloads programáticos (Harvest, dashboard, VALA) que NO usan Claude Code CLI ni gateway LiteLLM. Esto NO es bug del bridge — es gap de cobertura de instrumentación, conocido y documentado en POST-V1 backlog (PV1-A3 onboarding LiteLLM).
+
+**Test anti-regresión**: `tests/cost-reconciliation.test.ts` (+2 tests) verifica que toda llamada futura a `cost_report` desde el reconciler incluye `group_by[]=description`. El test usa `Bun.serve` mock y un `ANTHROPIC_ADMIN_API_BASE` override añadido a `shared/anthropic-admin-client.ts:AnthropicAdminConfig.baseUrl`.
+
+**Bug colateral arreglado**: el container `litellm:v1.83.7-stable` de docker-compose tenía healthcheck `curl -f http://localhost:4000/health/liveliness`, pero la imagen NO incluye `curl` ni `wget`. 585 fallos consecutivos del healthcheck reportaban el container como `unhealthy` aunque funcionaba. Reemplazado por `python3 -c "import urllib.request; ..."` (python3 sí está en la imagen). Verificado: exit 0.
+
+Tests: 818 / 0 fail / 1475 expects (de 816/1470 pre-fix).
+
 ### PR Audit-3 — Coherencia documental + reglas globales (2026-05-08)
 
 Cierra los items de Nivel 4 de la auditoría 360º y formaliza los patrones detectados como reglas reusables — separadas por scope.
