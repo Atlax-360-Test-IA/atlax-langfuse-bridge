@@ -71,11 +71,19 @@ async function replayHook(
       cwd,
       permission_mode: "default",
       hook_event_name: "Stop",
+      // S22-A: tag the trace as `source:reconciler` so backfilled sessions
+      // are distinguishable from real-time hook emissions in Langfuse.
+      _invokedByReconciler: true,
     });
 
     const proc = spawn(process.execPath, ["run", HOOK_PATH], {
       stdio: ["pipe", "pipe", "pipe"],
-      env: process.env,
+      // LANGFUSE_FORCE_NOW_TIMESTAMP=1 forces the hook to use ingestion `now`
+      // instead of the original session timestamps. ClickHouse's
+      // ReplacingMergeTree keys events by event_ts, so replaying old sessions
+      // with their original timestamps would lose against any subsequent
+      // live-hook event. See ARCHITECTURE.md §11 (incident 22-Apr-2026).
+      env: { ...process.env, LANGFUSE_FORCE_NOW_TIMESTAMP: "1" },
     });
 
     let stderr = "";

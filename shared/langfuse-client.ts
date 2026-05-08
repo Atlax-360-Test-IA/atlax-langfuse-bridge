@@ -12,6 +12,23 @@ export interface LangfuseConfig {
   publicKey: string;
   secretKey: string;
   timeoutMs: number;
+  /** Optional external abort signal (composed with timeoutMs via AbortSignal.any). */
+  signal?: AbortSignal;
+}
+
+/**
+ * Distinguished error class for 404 responses from Langfuse. Allows callers
+ * (e.g. reconciler) to treat "trace not yet ingested" as a control-flow case
+ * without parsing error messages by string match.
+ */
+export class LangfuseNotFoundError extends Error {
+  constructor(
+    public readonly path: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "LangfuseNotFoundError";
+  }
 }
 
 export interface LangfuseTrace {
@@ -88,7 +105,19 @@ function buildConfig(override?: Partial<LangfuseConfig>): LangfuseConfig {
     publicKey,
     secretKey,
     timeoutMs: override?.timeoutMs ?? 10_000,
+    ...(override?.signal !== undefined ? { signal: override.signal } : {}),
   };
+}
+
+/**
+ * Compose an AbortSignal that aborts on either the configured timeout OR
+ * the optional external signal (e.g. from ToolContext budget). Falls back
+ * to a plain timeout signal when no external signal is present.
+ */
+function composeSignal(cfg: LangfuseConfig): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(cfg.timeoutMs);
+  if (!cfg.signal) return timeoutSignal;
+  return AbortSignal.any([timeoutSignal, cfg.signal]);
 }
 
 function authHeader(cfg: LangfuseConfig): string {
@@ -110,13 +139,13 @@ async function request<T>(
       "Content-Type": "application/json",
       ...(init.headers ?? {}),
     },
-    signal: AbortSignal.timeout(cfg.timeoutMs),
+    signal: composeSignal(cfg),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(
-      `[langfuse-client] ${init.method ?? "GET"} ${path} → ${res.status}: ${body.slice(0, 200)}`,
-    );
+    const msg = `[langfuse-client] ${init.method ?? "GET"} ${path} → ${res.status}: ${body.slice(0, 200)}`;
+    if (res.status === 404) throw new LangfuseNotFoundError(path, msg);
+    throw new Error(msg);
   }
   return (await res.json()) as T;
 }
@@ -137,7 +166,7 @@ export async function getTrace(
       cfg,
     );
   } catch (err) {
-    if (err instanceof Error && err.message.includes("→ 404")) return null;
+    if (err instanceof LangfuseNotFoundError) return null;
     throw err;
   }
 }

@@ -8,6 +8,13 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
+import { saveEnv, restoreEnv } from "./helpers/env";
+
+const ENV_KEYS = [
+  "LANGFUSE_PUBLIC_KEY",
+  "LANGFUSE_SECRET_KEY",
+  "LANGFUSE_HOST",
+];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -31,7 +38,7 @@ function makeOkTrace() {
 
 describe("reconcile-traces: getTrace wrapper", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(ENV_KEYS);
 
   beforeEach(() => {
     process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
@@ -42,7 +49,7 @@ describe("reconcile-traces: getTrace wrapper", () => {
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("returns trace on 200", async () => {
@@ -89,7 +96,7 @@ describe("reconcile-traces: getTrace wrapper", () => {
 
 describe("reconcile-traces: getGenerationCost wrapper", () => {
   let fetchSpy: ReturnType<typeof spyOn>;
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(ENV_KEYS);
 
   beforeEach(() => {
     process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
@@ -100,7 +107,7 @@ describe("reconcile-traces: getGenerationCost wrapper", () => {
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("returns summed cost on success", async () => {

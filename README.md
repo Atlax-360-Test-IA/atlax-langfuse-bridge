@@ -13,7 +13,7 @@ programáticos, y un MCP server para consultas agénticas.
 > 📜 **Changelog**: [`CHANGELOG.md`](./CHANGELOG.md)
 > 📊 **Dashboard Langfuse**: [`docs/operations/langfuse-dashboard-guide.md`](./docs/operations/langfuse-dashboard-guide.md)
 
-**v1.0 · 805 tests / 1450 expects / 0 fallos**
+**v0.6.0-wip · 805 tests / 1450 expects / 0 fallos** · v1.0 cuando piloto exitoso (≥3 devs × 2 semanas)
 
 ---
 
@@ -71,14 +71,22 @@ bash setup/setup.sh \
   "sk-lf-XXXX"
 ```
 
-**Piloto multi-IDE (LiteLLM gateway)**:
+**Piloto multi-IDE (LiteLLM gateway)** — credenciales por env vars, flags solo `--litellm-mode` y `--dry-run`:
 
 ```bash
-bash scripts/pilot-onboarding.sh \
-  --litellm-mode \
-  --host "https://langfuse.atlax360.com" \
-  --public-key "pk-lf-XXXX" \
-  --secret-key "sk-lf-XXXX"
+LANGFUSE_HOST="https://langfuse.atlax360.com" \
+LANGFUSE_PUBLIC_KEY="pk-lf-XXXX" \
+LANGFUSE_SECRET_KEY="sk-lf-XXXX" \
+LITELLM_BASE_URL="https://litellm.atlax360.com" \
+LITELLM_VIRTUAL_KEY="sk-..." \
+bash scripts/pilot-onboarding.sh --litellm-mode
+```
+
+Para preview sin escribir nada:
+
+```bash
+LANGFUSE_HOST=... LANGFUSE_PUBLIC_KEY=... LANGFUSE_SECRET_KEY=... \
+  bash scripts/pilot-onboarding.sh --dry-run
 ```
 
 Ver [`docs/operations/litellm-onboarding.md`](./docs/operations/litellm-onboarding.md)

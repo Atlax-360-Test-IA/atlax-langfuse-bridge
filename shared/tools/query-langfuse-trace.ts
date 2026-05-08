@@ -112,17 +112,24 @@ export const queryLangfuseTrace: AgentTool<QueryTraceInput, QueryTraceOutput> =
       ) {
         return { ok: false, error: "fromTimestamp must be string" };
       }
-      if (r["toTimestamp"] !== undefined && typeof r["toTimestamp"] !== "string") {
+      if (
+        r["toTimestamp"] !== undefined &&
+        typeof r["toTimestamp"] !== "string"
+      ) {
         return { ok: false, error: "toTimestamp must be string" };
       }
       if (r["limit"] !== undefined) {
-        if (typeof r["limit"] !== "number" || r["limit"] <= 0 || r["limit"] > 100) {
+        if (
+          typeof r["limit"] !== "number" ||
+          r["limit"] <= 0 ||
+          r["limit"] > 100
+        ) {
           return { ok: false, error: "limit must be number in [1, 100]" };
         }
       }
       return { ok: true, data: r as QueryTraceInput };
     },
-    async execute(input, _ctx) {
+    async execute(input, ctx) {
       // Cache key: hash del input canónico. Tier cached_llm es cacheable.
       const cacheKey = `query-trace:${hashOf({
         t: input.traceId ?? null,
@@ -138,20 +145,30 @@ export const queryLangfuseTrace: AgentTool<QueryTraceInput, QueryTraceOutput> =
         return { ...(JSON.parse(cached) as QueryTraceOutput), fromCache: true };
       }
 
+      // Compose a step-budget signal so the HTTP call respects the agent's
+      // remaining budget. ToolContext.signal (if any) propagates upstream cancel.
+      const stepSignal = AbortSignal.timeout(ctx.stepBudgetMs);
+      const signal = ctx.signal
+        ? AbortSignal.any([stepSignal, ctx.signal])
+        : stepSignal;
+
       let traces: LangfuseTrace[];
       if (input.traceId) {
-        const single = await getTrace(input.traceId);
+        const single = await getTrace(input.traceId, { signal });
         traces = single ? [single] : [];
       } else {
-        const res = await listTraces({
-          userId: input.userId,
-          sessionId: input.sessionId,
-          tags: input.tags,
-          fromTimestamp: input.fromTimestamp,
-          toTimestamp: input.toTimestamp,
-          limit: input.limit ?? 20,
-          orderBy: "timestamp.desc",
-        });
+        const res = await listTraces(
+          {
+            userId: input.userId,
+            sessionId: input.sessionId,
+            tags: input.tags,
+            fromTimestamp: input.fromTimestamp,
+            toTimestamp: input.toTimestamp,
+            limit: input.limit ?? 20,
+            orderBy: "timestamp.desc",
+          },
+          { signal },
+        );
         traces = res.data;
       }
 

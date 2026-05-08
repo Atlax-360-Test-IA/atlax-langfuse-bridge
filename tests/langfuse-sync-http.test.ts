@@ -84,6 +84,7 @@ async function runHook(
       LANGFUSE_SECRET_KEY: "sk-test-e2e",
       LANGFUSE_USER_ID: "e2e-test@atlax360.com",
       HOME: process.env["HOME"] ?? "/tmp",
+      ATLAX_TRANSCRIPT_ROOT_OVERRIDE: join(import.meta.dir, "fixtures"),
       ...extraEnv,
     },
     cwd: join(import.meta.dir, ".."),
@@ -212,6 +213,7 @@ describe("langfuse-sync → Bun.serve mock HTTP", () => {
         LANGFUSE_SECRET_KEY: "sk-test-e2e",
         LANGFUSE_USER_ID: "e2e-test@atlax360.com",
         HOME: process.env["HOME"] ?? "/tmp",
+        ATLAX_TRANSCRIPT_ROOT_OVERRIDE: join(import.meta.dir, "fixtures"),
       },
       cwd: join(import.meta.dir, ".."),
     });
