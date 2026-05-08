@@ -192,6 +192,22 @@ if [[ "$SKIP_VPC" != "true" ]]; then
       --source-ranges=35.235.240.0/20 \
       --target-tags=langfuse-data
   fi
+
+  # Defense-in-depth: deny outbound a TODO RFC1918 que no esté en una allow
+  # rule explícita. private-ranges-only ya bloquea internet, pero esta deny
+  # blinda contra peering futuro accidental con otros VPCs corporativos.
+  # Prioridad 1100 — más alta que las allow específicas (1000-1020).
+  if ! exists "gcloud compute firewall-rules describe fw-deny-rfc1918-default --project=$GCP_PROJECT_ID"; then
+    run gcloud compute firewall-rules create fw-deny-rfc1918-default \
+      --project="$GCP_PROJECT_ID" \
+      --network=vpc-langfuse \
+      --direction=EGRESS \
+      --action=DENY \
+      --rules=all \
+      --destination-ranges=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16 \
+      --target-tags=langfuse-egress \
+      --priority=1100
+  fi
 fi
 
 # ── 3. Cloud SQL Postgres ───────────────────────────────────────────────────
