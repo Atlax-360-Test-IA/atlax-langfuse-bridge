@@ -425,7 +425,7 @@ Ver `infra/backup-story.md` para detalle de backup story (RPO ≤ 1 min).
 
 ## §10 · Testing
 
-**Estado actual**: 750 tests / 1370 expects / 48 ficheros / 0 fallos.
+**Estado actual**: 805 tests / 1450 expects / 50 ficheros / 0 fallos.
 
 ### Pirámide de tests
 
