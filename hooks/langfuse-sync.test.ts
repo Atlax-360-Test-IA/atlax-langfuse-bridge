@@ -127,12 +127,11 @@ describe("detectOS", () => {
     expect(["linux", "wsl", "macos", "windows"]).toContain(os);
   });
 
-  test("returns wsl on this WSL2 system", () => {
+  test("returns wsl on this WSL2 system", async () => {
     // This test is environment-specific; skip if not on WSL
     try {
-      const version = require("fs")
-        .readFileSync("/proc/version", "utf-8")
-        .toLowerCase();
+      const fs = await import("node:fs");
+      const version = fs.readFileSync("/proc/version", "utf-8").toLowerCase();
       if (version.includes("microsoft")) {
         expect(detectOS()).toBe("wsl");
       }

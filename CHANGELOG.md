@@ -38,6 +38,58 @@ Semver retroactivo. Política:
 
 - ADR-008 documentando límites de recuperabilidad y lecciones del incidente 22-Apr-2026
 
+### PR Audit-2 — Hardening + calidad (2026-05-08)
+
+Items Nivel 2-3 de la auditoría 360º. Sin afectar comportamiento, propaga reglas
+que ya existían en un módulo a todos los demás:
+
+- **H1**: NaN guards añadidos en `THROTTLE_MS` (`backfill-historical-traces.ts`) y
+  `MCP_STEP_BUDGET_MS` (`mcp-server.ts`). Patrón copiado del existente en
+  `WINDOW_HOURS` (`reconcile-traces.ts`). `setTimeout(fn, NaN)` y
+  `AbortSignal.timeout(NaN)` ya no producen comportamiento silencioso/RangeError.
+- **H2 + H6**: `SAFE_SID_RE` movido a `shared/validation.ts` con bound de longitud
+  `{1,128}`. Eliminados duplicados en `reconcile-traces.ts` (re-export por compat)
+  y `backfill-historical-traces.ts`. Aplicado por primera vez en `validate-traces.ts`.
+- **H3**: `mcp-server.ts` con `MAX_LINE_BYTES = 1MB`: si un cliente envía una línea
+  > 1MB sin newline, el servidor cierra la conexión en vez de crecer hasta OOM.
+- **H5**: `tier.json` se escribe con `mode: 0o600` (defensa en profundidad por si
+  el campo `account` lleva datos sensibles en el futuro).
+- **H9**: `litellm-m3-virtual-keys.test.ts` — sleep hardcoded de 2s reemplazado por
+  polling con backoff exponencial (250ms→4s, deadline 8s). Reduce flakiness en CI lento.
+- **H10**: `costEntries.sort()` mutante reemplazado por `[...].toSorted()` (ES2023).
+  `tsconfig.json` sube `lib: ES2023`.
+- **H11**: `readTierFile()` valida también el campo `account` (debe ser `string|null`).
+- **H12**: `pilot-onboarding.sh` elimina `eval "$*"` — usa `"$@"` con printf %q
+  para dry-run. Antipattern reconocido del global rules.
+
+CALIDAD
+
+- **Q1**: Eliminados los 4 `require()` en módulos ESM (3 tests + 1 import lazy):
+  `cross-validation.test.ts`, `langfuse-payload-schema.test.ts`,
+  `langfuse-sync.test.ts` (await import), `detect-tier-advanced.test.ts`.
+- **Q2**: Aserciones débiles fortalecidas (`toBeCloseTo` para floats, `not.toBe("undefined")`).
+- **Q4**: `as any` en zod-adapter default reemplazado por exhaustiveness check con
+  `const _exhaustive: never = prop.type` (TS detecta variantes nuevas).
+- **Q5**: `withSandboxAll<T extends AgentTool<any, any>>` → `<unknown, unknown>` +
+  `readonly T[]` (preserva tsconfig maximalista).
+- **Q7**: Browser extension genera generation IDs con `crypto.randomUUID()` en vez
+  de `${traceId}-${now}` (millisecond collision en automatización).
+- **Q8**: Browser extension añade tag `cost-source:estimated` para coincidir con
+  hook + reconciler (queries de dashboard ven todas las superficies consistentemente).
+- **Q9**: Nuevo `tests/concurrency.test.ts` (+11 tests):
+  - Mutex de `withSandbox`: serialización de N=10 calls concurrentes verificada
+    con `maxInFlight === 1`.
+  - Liberación del mutex tras rejection (no deadlock).
+  - Independencia entre tools de nombre distinto.
+  - Validación defensiva de tools MCP con args malformados (null, tipos erróneos,
+    limit fuera de rango, value object).
+  - Path traversal: `safeFilePath()` bloquea `../`, sibling-prefix trick, input vacío.
+- **Q10**: `provision-keys.ts` ya no loguea prefix de virtual key — solo length.
+- **Q12**: `backup-langfuse.sh` valida nombres de tabla con regex
+  `^[a-zA-Z_][a-zA-Z0-9_]*$` antes de interpolar en SQL (defensa en profundidad).
+
+Tests: 816 / 0 fail / 1470 expects (+11 tests, +18 expects vs PR Audit-1).
+
 ### PR Audit-1 — Bloqueantes pre-onboarding (2026-05-08)
 
 Salida de la auditoría 360º (4 agentes especializados). Items bloqueantes:

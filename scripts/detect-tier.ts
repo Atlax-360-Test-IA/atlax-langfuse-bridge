@@ -104,7 +104,10 @@ export function writeIfChanged(tier: TierFile): boolean {
   if (unchanged) return false;
 
   const tmp = `${TIER_PATH}.tmp.${process.pid}`;
-  writeFileSync(tmp, JSON.stringify(tier, null, 2));
+  // chmod 600 — defense in depth. tier.json may carry an `account` field
+  // (currently null per I-8 but reserved); 600 keeps it private if it
+  // becomes sensitive in the future. Writes atomically via tmp + rename.
+  writeFileSync(tmp, JSON.stringify(tier, null, 2), { mode: 0o600 });
   renameSync(tmp, TIER_PATH);
   return true;
 }

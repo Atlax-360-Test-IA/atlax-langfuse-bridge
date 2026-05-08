@@ -108,6 +108,14 @@ else
     docker exec "$CH_CONTAINER" clickhouse-client \
       --query="SELECT name FROM system.tables WHERE database='default' AND engine NOT LIKE '%View%' ORDER BY name" \
       2>/dev/null | while read -r table; do
+        # Defense in depth: even though ClickHouse normally won't return
+        # table names with quotes/semicolons, validate the shape before
+        # interpolating into a query. Skip rows that don't look like a
+        # plain identifier.
+        if [[ ! "$table" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+          echo "-- skip (invalid table name): ${table}"
+          continue
+        fi
         echo "-- Table: $table"
         echo "-- DDL:"
         docker exec "$CH_CONTAINER" clickhouse-client \

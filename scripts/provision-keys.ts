@@ -202,7 +202,9 @@ async function main(): Promise<void> {
 
     try {
       const key = await createKey(host, masterKey, wl);
-      log(`OK    ${wl.key_alias} — created (${key.slice(0, 10)}...)`);
+      // Don't log any prefix of the virtual key — even partial chars create
+      // an unnecessary trail in journalctl/CI logs. Length is enough proof.
+      log(`OK    ${wl.key_alias} — created (length=${key.length})`);
       results.push({
         key_alias: wl.key_alias,
         key,

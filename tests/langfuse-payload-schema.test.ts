@@ -22,7 +22,13 @@
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { join } from "node:path";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { aggregateLines } from "../shared/aggregate";
 import { getPricing } from "../shared/model-pricing";
@@ -274,7 +280,6 @@ describe("LANGFUSE_FORCE_NOW_TIMESTAMP=1 — hook subprocess", () => {
   });
 
   test("aggregate from fixture has correct session timestamps for 2026-01-01", () => {
-    const { readFileSync } = require("node:fs");
     const lines = readFileSync(transcriptPath, "utf-8")
       .split("\n")
       .filter(Boolean) as string[];

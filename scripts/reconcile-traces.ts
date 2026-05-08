@@ -38,6 +38,11 @@ import {
   getCostReport,
   sumCostByModel,
 } from "../shared/anthropic-admin-client";
+import { SAFE_SID_RE } from "../shared/validation";
+
+// Re-export for tests and downstream consumers that historically imported
+// from this module (kept stable as a public API surface).
+export { SAFE_SID_RE };
 
 const HOST = (process.env["LANGFUSE_HOST"] ?? "http://localhost:3000").replace(
   /\/$/,
@@ -282,8 +287,6 @@ async function reconcileCostAgainstAnthropic(
 // ─── Replay hook with reconstructed Stop payload ─────────────────────────────
 
 // Safe session ID: only alphanumeric, hyphens, underscores (UUID format).
-// Prevents path traversal if the filename ever influences a downstream path.
-export const SAFE_SID_RE = /^[0-9a-zA-Z_-]+$/;
 
 async function replayHook(
   sessionId: string,
