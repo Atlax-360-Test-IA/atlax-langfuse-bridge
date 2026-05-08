@@ -13,6 +13,13 @@ import {
   mock,
 } from "bun:test";
 import type { LangfuseTrace, ScoreBody } from "./langfuse-client";
+import { saveEnv, restoreEnv } from "../tests/helpers/env";
+
+const ENV_KEYS = [
+  "LANGFUSE_HOST",
+  "LANGFUSE_PUBLIC_KEY",
+  "LANGFUSE_SECRET_KEY",
+] as const;
 import { isSafeHost } from "./langfuse-client";
 
 // ─── fetch mock helpers ───────────────────────────────────────────────────────
@@ -45,10 +52,10 @@ const TRACE_FIXTURE: LangfuseTrace = {
 // ─── buildConfig (via exported functions that call it) ────────────────────────
 
 describe("buildConfig — missing credentials", () => {
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(ENV_KEYS);
 
   afterEach(() => {
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("throws when LANGFUSE_PUBLIC_KEY is missing", async () => {
@@ -69,7 +76,7 @@ describe("buildConfig — missing credentials", () => {
 // ─── getTrace ─────────────────────────────────────────────────────────────────
 
 describe("getTrace", () => {
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(ENV_KEYS);
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
@@ -81,7 +88,7 @@ describe("getTrace", () => {
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("returns trace on 200", async () => {
@@ -142,7 +149,7 @@ describe("getTrace", () => {
 // ─── listTraces ───────────────────────────────────────────────────────────────
 
 describe("listTraces", () => {
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(ENV_KEYS);
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
@@ -154,7 +161,7 @@ describe("listTraces", () => {
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("returns data and meta on success", async () => {
@@ -218,7 +225,7 @@ describe("listTraces", () => {
 // ─── createScore ──────────────────────────────────────────────────────────────
 
 describe("createScore", () => {
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(ENV_KEYS);
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
@@ -230,7 +237,7 @@ describe("createScore", () => {
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("returns score id on success", async () => {
@@ -330,7 +337,7 @@ describe("isSafeHost", () => {
 // ─── getGenerationsForTrace ───────────────────────────────────────────────────
 
 describe("getGenerationsForTrace", () => {
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(ENV_KEYS);
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
@@ -342,7 +349,7 @@ describe("getGenerationsForTrace", () => {
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("sums calculatedTotalCost across observations", async () => {

@@ -6,7 +6,7 @@
 > [`docs/operations/runbook.md`](./docs/operations/runbook.md). Para decisiones
 > formales, ver [`docs/adr/`](./docs/adr/).
 
-**Versión actual**: v0.5.5
+**Versión actual**: v0.6.0-wip (v1.0 al cumplir exit criteria piloto)
 **Última actualización**: 2026-05-07
 **Estado**: Production-ready PoC (Langfuse v3 self-hosted local)
 
@@ -160,7 +160,7 @@ atlax-langfuse-bridge/
 │   └── backup-story.md               # Cloud SQL PITR + ClickHouse + GCS
 │
 ├── docs/
-│   ├── adr/                          # 9 ADRs Michael Nygard (ADR-001..ADR-009, ADR-011)
+│   ├── adr/                          # 11 ADRs Michael Nygard (ADR-001..ADR-011)
 │   ├── operations/
 │   │   ├── runbook.md                # Runbook operativo
 │   │   ├── litellm-onboarding.md     # Guía onboarding devs piloto (S21-A)

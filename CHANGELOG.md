@@ -29,14 +29,30 @@ Semver retroactivo. Política:
 
 ### Changed
 
-- Langfuse stack actualizado de 3.167.4 → 3.171.0 (security fixes v3.168, v3.170; catálogo modelos actualizado con claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5) (PR #37)
-- Imágenes Docker pineadas a versión exacta `:3.171.0` (antes tag flotante `:3`)
+- Langfuse stack actualizado a `3.172.1` (web + worker pineados a versión exacta — incremento desde 3.171.0 sin cambios funcionales; pin para reproducibilidad)
+- Imágenes Docker pineadas a versión exacta (anterior bump `3.167.4 → 3.171.0` en PR #37 con security fixes v3.168, v3.170 y catálogo de modelos `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`)
 - Worker healthcheck: `127.0.0.1` → `$$(hostname -i)` — el worker no escucha en loopback
 - Eliminados `user:` forzados en postgres y minio que causaban conflictos con UIDs de volúmenes existentes
 
 ### ADR
 
 - ADR-008 documentando límites de recuperabilidad y lecciones del incidente 22-Apr-2026
+
+### PR Audit-1 — Bloqueantes pre-onboarding (2026-05-08)
+
+Salida de la auditoría 360º (4 agentes especializados). Items bloqueantes:
+
+- **B1** README Quick Start §2: corregido — `pilot-onboarding.sh` solo acepta `--litellm-mode` y `--dry-run`, las credenciales son env vars (no flags `--host`/`--public-key` que no existen).
+- **B2** ADR-010 + ADR-009 + ADR-011 añadidos al índice canónico (`docs/adr/README.md`); CLAUDE.md y ARCHITECTURE.md ahora dicen `ADR-001..ADR-011` (eran "001..009, 011").
+- **B3** Versión declarada `v0.6.0-wip` (era `0.5.4` en `package.json`, `0.5.5` en ARCHITECTURE, "v1.0" en README). v1.0 al cumplir exit criteria del piloto (≥3 devs × 2 semanas).
+- **B4** Langfuse 3.172.1 documentado en CHANGELOG (drift respecto a 3.171.0 que figuraba antes).
+- **B5** `ToolContext.signal`/`stepBudgetMs` ahora cableado en `query-langfuse-trace.ts` y `annotate-observation.ts` con `AbortSignal.any([stepSignal, ctx.signal])`. `shared/langfuse-client.ts` extendido para aceptar `signal` en `LangfuseConfig`. Bonus L-3: `LangfuseNotFoundError` tipado reemplaza el string-match `"→ 404"`.
+- **B6** `docker-compose.yml`: `langfuse-web:3000` y `litellm:4001` ahora bindados a `127.0.0.1:` (estaban a `0.0.0.0`, accesibles desde LAN).
+- **B7** Hook `transcript_path` confinado a `~/.claude/projects/` con nuevo helper `safeFilePath()` en `shared/validation.ts`. Override `ATLAX_TRANSCRIPT_ROOT_OVERRIDE` reservado solo para tests.
+- **B8** `setup/setup.sh` converge con `pilot-onboarding.sh`: credenciales a `~/.atlax-ai/bridge.env` (chmod 600) + `source` desde shell rc, en vez de inline en `~/.zshrc` (chmod 644). Añadida limpieza de installs legacy.
+- **B9** `backfill-historical-traces.ts`: inyecta `_invokedByReconciler: true` en el payload Stop (tag `source:reconciler`) y `LANGFUSE_FORCE_NOW_TIMESTAMP=1` en el env (evita que ClickHouse ReplacingMergeTree pierda traces buenos).
+- **B10** I-12 violations limpiadas: 14 ocurrencias de `process.env = { ...origEnv }` en 7 ficheros de test → reemplazadas por nuevo helper `tests/helpers/env.ts` (`saveEnv`/`restoreEnv` por clave específica).
+- **H4** StopEvent con validación de tipos explícita (`typeof event.session_id === "string"` etc.) tras el `JSON.parse`.
 
 ### Ops (Sprint 24 — 2026-05-07) · CIERRE v1
 

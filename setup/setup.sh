@@ -112,7 +112,11 @@ else:
 PYEOF
 ok "Claude Code settings.json actualizado"
 
-# ── 5. Add env vars to shell rc ───────────────────────────────────────────────
+# ── 5. Write credentials to dedicated file (chmod 600) + source from shell rc ─
+# Prior versions wrote credentials directly into ~/.zshrc (mode 644). That file
+# is world-readable on most systems and gets parsed by IDE settings sync, dotfile
+# backups, and diagnostic scripts. Use a dedicated 600 file (same pattern as
+# scripts/pilot-onboarding.sh) and source it from the shell rc.
 SHELL_RC=""
 if [[ -f "$HOME/.zshrc" ]]; then
   SHELL_RC="$HOME/.zshrc"
@@ -120,24 +124,41 @@ elif [[ -f "$HOME/.bashrc" ]]; then
   SHELL_RC="$HOME/.bashrc"
 fi
 
+ATLAX_DIR="$HOME/.atlax-ai"
+ENV_FILE="$ATLAX_DIR/bridge.env"
+
 if [[ -n "$LANGFUSE_HOST" && -n "$LANGFUSE_PUBLIC_KEY" && -n "$LANGFUSE_SECRET_KEY" ]]; then
-  if [[ -n "$SHELL_RC" ]]; then
-    # Remove existing entries to avoid duplicates
-    grep -v "LANGFUSE_HOST\|LANGFUSE_PUBLIC_KEY\|LANGFUSE_SECRET_KEY" "$SHELL_RC" > "${SHELL_RC}.tmp" || true
-    mv "${SHELL_RC}.tmp" "$SHELL_RC"
-
-    cat >> "$SHELL_RC" <<ENVEOF
-
-# Langfuse — Atlax360 Claude Code telemetry
+  mkdir -p "$ATLAX_DIR"
+  # Write atomically with 600 permissions
+  umask_old=$(umask)
+  umask 077
+  cat > "$ENV_FILE" <<ENVEOF
+# Langfuse — Atlax360 Claude Code telemetry credentials
+# This file is sourced by your shell rc (chmod 600). Do not commit.
 export LANGFUSE_HOST="$LANGFUSE_HOST"
 export LANGFUSE_PUBLIC_KEY="$LANGFUSE_PUBLIC_KEY"
 export LANGFUSE_SECRET_KEY="$LANGFUSE_SECRET_KEY"
 ENVEOF
-    ok "Variables de entorno añadidas a $SHELL_RC"
+  chmod 600 "$ENV_FILE"
+  umask "$umask_old"
+  ok "Credenciales guardadas en $ENV_FILE (chmod 600)"
+
+  if [[ -n "$SHELL_RC" ]]; then
+    # Remove inline LANGFUSE_* exports from shell rc (legacy installs) and any
+    # previous source line, then append a single source line.
+    grep -v "LANGFUSE_HOST\|LANGFUSE_PUBLIC_KEY\|LANGFUSE_SECRET_KEY\|.atlax-ai/bridge.env" "$SHELL_RC" > "${SHELL_RC}.tmp" || true
+    mv "${SHELL_RC}.tmp" "$SHELL_RC"
+
+    cat >> "$SHELL_RC" <<RCEOF
+
+# Atlax Langfuse Bridge — load credentials from dedicated 600 file
+[ -f "\$HOME/.atlax-ai/bridge.env" ] && source "\$HOME/.atlax-ai/bridge.env"
+RCEOF
+    ok "Línea de carga añadida a $SHELL_RC"
     warn "Ejecuta: source $SHELL_RC"
   fi
 else
-  warn "No se proporcionaron credenciales. Añade manualmente a ~/.zshrc o ~/.bashrc:"
+  warn "No se proporcionaron credenciales. Crea manualmente $ENV_FILE (chmod 600):"
   echo ""
   echo "  export LANGFUSE_HOST=\"https://tu-instancia.atlax360.com\""
   echo "  export LANGFUSE_PUBLIC_KEY=\"pk-lf-...\""

@@ -7,8 +7,14 @@ import { describe, expect, test, beforeEach, afterEach, spyOn } from "bun:test";
 import { clearCache } from "../hash-cache";
 import { queryLangfuseTrace } from "./query-langfuse-trace";
 import type { ToolContext } from "./types";
+import { saveEnv, restoreEnv } from "../../tests/helpers/env";
 
 const CTX: ToolContext = { agentType: "coordinator", stepBudgetMs: 10_000 };
+const ENV_KEYS = [
+  "LANGFUSE_HOST",
+  "LANGFUSE_PUBLIC_KEY",
+  "LANGFUSE_SECRET_KEY",
+] as const;
 
 const TRACE_FIXTURE = {
   id: "cc-abc-123",
@@ -37,7 +43,7 @@ function makeResponse(body: unknown, status = 200): Response {
 }
 
 describe("queryLangfuseTrace.execute — traceId lookup", () => {
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(ENV_KEYS);
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
@@ -50,7 +56,7 @@ describe("queryLangfuseTrace.execute — traceId lookup", () => {
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("returns single trace on direct traceId lookup", async () => {
@@ -105,7 +111,7 @@ describe("queryLangfuseTrace.execute — traceId lookup", () => {
 });
 
 describe("queryLangfuseTrace.execute — cache hit/miss", () => {
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(ENV_KEYS);
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
@@ -118,7 +124,7 @@ describe("queryLangfuseTrace.execute — cache hit/miss", () => {
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("second identical call hits cache (fromCache=true)", async () => {
@@ -151,7 +157,7 @@ describe("queryLangfuseTrace.execute — cache hit/miss", () => {
 });
 
 describe("queryLangfuseTrace.execute — list (no traceId)", () => {
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(ENV_KEYS);
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
@@ -164,7 +170,7 @@ describe("queryLangfuseTrace.execute — list (no traceId)", () => {
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("uses listTraces when no traceId provided", async () => {

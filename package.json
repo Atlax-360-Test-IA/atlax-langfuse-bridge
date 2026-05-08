@@ -1,6 +1,6 @@
 {
   "name": "atlax-langfuse-bridge",
-  "version": "0.5.4",
+  "version": "0.6.0-wip",
   "description": "Torre de control FinOps para Claude Code en Atlax360 — hook Stop + reconciler cron + MCP server + Langfuse v3 self-hosted, cero deps prod.",
   "private": true,
   "type": "module",

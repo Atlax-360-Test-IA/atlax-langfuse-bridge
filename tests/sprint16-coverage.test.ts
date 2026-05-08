@@ -58,7 +58,11 @@ async function runHookProcess(
     stdin: new TextEncoder().encode(JSON.stringify(event)),
     stdout: "ignore",
     stderr: "pipe",
-    env: { ...process.env, ...env },
+    env: {
+      ...process.env,
+      ATLAX_TRANSCRIPT_ROOT_OVERRIDE: join(import.meta.dir, "fixtures"),
+      ...env,
+    },
     cwd: ROOT,
   });
   await proc.exited;

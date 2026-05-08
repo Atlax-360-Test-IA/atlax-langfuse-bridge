@@ -9,8 +9,10 @@ import {
   type SandboxedExecutionOutput,
 } from "./sandbox";
 import type { AgentTool, ToolContext } from "./types";
+import { saveEnv, restoreEnv } from "../../tests/helpers/env";
 
 const ctx: ToolContext = { agentType: "coordinator", stepBudgetMs: 5000 };
+const ENV_KEYS = ["TOOLS_SANDBOX_MODE"] as const;
 
 const realExecute = async () => ({ real: true, value: 42 });
 
@@ -33,9 +35,9 @@ const tool: AgentTool<{ x: number }, { real: boolean; value: number }> = {
   execute: realExecute,
 };
 
-const origEnv = { ...process.env };
+const SAVED = saveEnv(ENV_KEYS);
 afterEach(() => {
-  process.env = { ...origEnv };
+  restoreEnv(SAVED);
   clearFixtures();
 });
 

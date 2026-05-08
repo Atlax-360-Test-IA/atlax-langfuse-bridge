@@ -7,6 +7,10 @@ import {
   getProjectName,
 } from "./langfuse-sync";
 import { emitDegradation, type DegradationEntry } from "../shared/degradation";
+import { saveEnv, restoreEnv } from "../tests/helpers/env";
+
+const BILLING_ENV_KEYS = ["CLAUDE_CODE_USE_VERTEX"] as const;
+const DEV_IDENTITY_ENV_KEYS = ["LANGFUSE_USER_ID", "CLAUDE_DEV_NAME"] as const;
 
 // ─── calcCost ───────────────────────────────────────────────────────────────
 
@@ -77,10 +81,10 @@ describe("calcCost", () => {
 // ─── getBillingTier ─────────────────────────────────────────────────────────
 
 describe("getBillingTier", () => {
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(BILLING_ENV_KEYS);
 
   afterEach(() => {
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("returns vertex-gcp when CLAUDE_CODE_USE_VERTEX=1", () => {
@@ -141,10 +145,10 @@ describe("detectOS", () => {
 // ─── getDevIdentity ─────────────────────────────────────────────────────────
 
 describe("getDevIdentity", () => {
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(DEV_IDENTITY_ENV_KEYS);
 
   afterEach(() => {
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("prefers LANGFUSE_USER_ID env var", () => {

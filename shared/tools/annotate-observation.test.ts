@@ -1,8 +1,14 @@
 import { describe, expect, test, beforeEach, afterEach, spyOn } from "bun:test";
 import { annotateObservation } from "./annotate-observation";
 import type { ToolContext } from "./types";
+import { saveEnv, restoreEnv } from "../../tests/helpers/env";
 
 const CTX: ToolContext = { agentType: "coordinator", stepBudgetMs: 10_000 };
+const ENV_KEYS = [
+  "LANGFUSE_HOST",
+  "LANGFUSE_PUBLIC_KEY",
+  "LANGFUSE_SECRET_KEY",
+] as const;
 
 function makeResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -163,7 +169,7 @@ describe("annotateObservation metadata", () => {
 // ─── execute() ────────────────────────────────────────────────────────────────
 
 describe("annotateObservation.execute", () => {
-  const origEnv = { ...process.env };
+  const SAVED = saveEnv(ENV_KEYS);
   let fetchSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
@@ -175,7 +181,7 @@ describe("annotateObservation.execute", () => {
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    process.env = { ...origEnv };
+    restoreEnv(SAVED);
   });
 
   test("returns scoreId, traceId, name on success (NUMERIC)", async () => {

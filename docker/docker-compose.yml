@@ -20,7 +20,7 @@ services:
       langfuse-worker:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000" # Langfuse UI/API — solo acceso local (no expuesto a LAN)
     healthcheck:
       test:
         [
@@ -292,7 +292,7 @@ services:
       langfuse-web:
         condition: service_healthy
     ports:
-      - "4001:4000" # host 4001 → container 4000 (API + Admin UI /ui)
+      - "127.0.0.1:4001:4000" # LiteLLM API + Admin UI /ui — solo acceso local (no expuesto a LAN)
     volumes:
       - ./litellm/config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--port", "4000"]

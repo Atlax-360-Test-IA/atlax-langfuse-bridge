@@ -102,7 +102,10 @@ export const annotateObservation: AgentTool<AnnotateInput, AnnotateOutput> = {
         error: "value is required (number | string | boolean)",
       };
     }
-    if (r["observationId"] !== undefined && typeof r["observationId"] !== "string") {
+    if (
+      r["observationId"] !== undefined &&
+      typeof r["observationId"] !== "string"
+    ) {
       return { ok: false, error: "observationId must be string if provided" };
     }
     if (r["comment"] !== undefined && typeof r["comment"] !== "string") {
@@ -120,7 +123,7 @@ export const annotateObservation: AgentTool<AnnotateInput, AnnotateOutput> = {
     }
     return { ok: true, data: r as unknown as AnnotateInput };
   },
-  async execute(input, _ctx) {
+  async execute(input, ctx) {
     const body: ScoreBody = {
       traceId: input.traceId,
       observationId: input.observationId,
@@ -129,7 +132,13 @@ export const annotateObservation: AgentTool<AnnotateInput, AnnotateOutput> = {
       dataType: input.dataType ?? inferDataType(input.value),
       comment: input.comment,
     };
-    const res = await createScore(body);
+    // Compose step budget with optional upstream signal — full_llm tools
+    // benefit most from honoring budget because they may be slower.
+    const stepSignal = AbortSignal.timeout(ctx.stepBudgetMs);
+    const signal = ctx.signal
+      ? AbortSignal.any([stepSignal, ctx.signal])
+      : stepSignal;
+    const res = await createScore(body, { signal });
     return {
       scoreId: res.id,
       traceId: input.traceId,

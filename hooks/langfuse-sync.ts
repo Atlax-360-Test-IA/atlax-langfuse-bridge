@@ -18,6 +18,7 @@ import { getPricing } from "../shared/model-pricing";
 import { aggregateLines } from "../shared/aggregate";
 import { emitDegradation } from "../shared/degradation";
 import { isSafeHost } from "../shared/langfuse-client";
+import { safeFilePath } from "../shared/validation";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -261,13 +262,50 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  // Type-validate the StopEvent before consuming its fields. The `as StopEvent`
+  // cast does NOT validate at runtime — without this guard a malformed Stop
+  // event (e.g. session_id as object) would propagate corrupted data to
+  // Langfuse. I-1: never throw, just exit 0 + emit degradation.
+  if (
+    typeof event.session_id !== "string" ||
+    typeof event.transcript_path !== "string" ||
+    typeof event.cwd !== "string"
+  ) {
+    emitDegradation(
+      "main:invalid-stop-event",
+      new Error(
+        `unexpected Stop event shape: session_id=${typeof event.session_id} transcript_path=${typeof event.transcript_path} cwd=${typeof event.cwd}`,
+      ),
+    );
+    process.exit(0);
+  }
+
   const { session_id, transcript_path, cwd, _invokedByReconciler } = event;
   if (!transcript_path || !session_id) process.exit(0);
+
+  // Confine transcript_path to ~/.claude/projects/ — defense against a
+  // compromised parent process injecting an arbitrary path via stdin.
+  // ATLAX_TRANSCRIPT_ROOT_OVERRIDE is reserved for the test suite to point
+  // at fixtures outside HOME; production code never sets it.
+  let safeTranscriptPath: string;
+  try {
+    const overrideRoot = process.env["ATLAX_TRANSCRIPT_ROOT_OVERRIDE"];
+    const safeRoot =
+      overrideRoot && overrideRoot.length > 0
+        ? overrideRoot
+        : path.join(os.homedir(), ".claude", "projects");
+    safeTranscriptPath = safeFilePath(safeRoot, transcript_path);
+  } catch (err) {
+    emitDegradation("main:unsafe-transcript-path", err);
+    process.exit(0);
+  }
 
   // Parse JSONL
   let lines: string[];
   try {
-    lines = readFileSync(transcript_path, "utf-8").split("\n").filter(Boolean);
+    lines = readFileSync(safeTranscriptPath, "utf-8")
+      .split("\n")
+      .filter(Boolean);
   } catch (err) {
     emitDegradation("main:read-transcript", err);
     process.exit(0);
