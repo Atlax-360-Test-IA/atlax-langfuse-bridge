@@ -13,7 +13,7 @@ programáticos, y un MCP server para consultas agénticas.
 > 📜 **Changelog**: [`CHANGELOG.md`](./CHANGELOG.md)
 > 📊 **Dashboard Langfuse**: [`docs/operations/langfuse-dashboard-guide.md`](./docs/operations/langfuse-dashboard-guide.md)
 
-**v1.0 · 776 tests / 1402 expects / 0 fallos**
+**v1.0 · 805 tests / 1450 expects / 0 fallos**
 
 ---
 
@@ -240,7 +240,7 @@ Trazas con prefijo `claude-web-*` y tag `entrypoint:claude-ai`.
 ## Comandos esenciales
 
 ```bash
-# Tests + typecheck (776 tests / 0 fallos)
+# Tests + typecheck (805 tests / 0 fallos)
 bun run check
 
 # Validar integridad contra Langfuse
@@ -285,7 +285,7 @@ Más comandos en [`docs/operations/runbook.md`](./docs/operations/runbook.md).
 hooks/                   # Hook Stop síncrono (langfuse-sync.ts)
 scripts/                 # Reconciler, MCP, validate, detect-tier, pilot-onboarding
 shared/                  # Biblioteca pura — pricing, aggregate, drift, degradation
-tests/                   # 776 tests / 1402 expects (49 ficheros)
+tests/                   # 805 tests / 1450 expects (50 ficheros)
 browser-extension/       # MV3 — captura claude.ai y Desktop App
 docker/                  # Langfuse v3 self-hosted + LiteLLM gateway (opt-in)
 infra/                   # Cloud Run target + backup story
@@ -325,5 +325,5 @@ Este repo sigue las convenciones canónicas del ecosistema Atlax360
 - **Branches**: nunca commitear a `main`. Rama `<type>/<descripción>`.
 - **Versionado**: semver (MAJOR breaking · MINOR feature · PATCH fix/docs).
 - **ADRs**: inmutables. Cambio = nuevo ADR con `Supersedes: ADR-NNN`.
-- **Tests**: cada PR pasa `bun run check` (typecheck + 776 tests).
+- **Tests**: cada PR pasa `bun run check` (typecheck + 805 tests).
 - **Invariantes**: respetar I-1..I-14 en [`CLAUDE.md`](./CLAUDE.md).

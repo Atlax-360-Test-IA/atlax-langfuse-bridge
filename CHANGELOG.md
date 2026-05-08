@@ -67,7 +67,13 @@ Semver retroactivo. Política:
 
 ### Metrics
 
-- Tests: 776 / expects: 1402 / files: 49 / 0 fail (Sprint 23 + fix PR #61)
+- Tests: 805 / expects: 1450 / files: 50 / 0 fail (post-audit pass 2026-05-08)
+
+### Audit pass 2026-05-08 (post-cierre v1)
+
+- `tests/reconcile-pure-functions.test.ts`: +29 tests directos sobre las funciones puras del reconciler (`familyKey`, `computeReportRange`, `isSeatOnlyScenario`, `compareCostByModel`). Cubre la lógica de divergencia coste estimado/real introducida en S18-B sin necesidad de mocks HTTP.
+- Sincronización de métricas: `README.md`, `ARCHITECTURE.md §10`, `CHANGELOG.md` actualizados a 805/1450/50.
+- Validación SDD (`tests/sdd-invariants.test.ts` + `tests/sdd-links.test.ts`): 58/58 tests verdes — todos los I-1..I-14 tienen cobertura documental, todos los paths referenciados existen.
 
 ---
 
