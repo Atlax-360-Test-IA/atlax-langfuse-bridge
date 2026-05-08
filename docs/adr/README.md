@@ -19,6 +19,7 @@ Formato: [Michael Nygard](https://github.com/joelparkerhenderson/architecture-de
 | [ADR-009](./ADR-009-seats-quota-structural-limit.md) | Quota seats Premium — límite estructural API   | Accepted | —          | 2026-05-07 |
 | [ADR-010](./ADR-010-litellm-milestone-plan.md)       | LiteLLM milestone plan M1→M3 con exit criteria | Accepted | —          | 2026-05-07 |
 | [ADR-011](./ADR-011-parallel-subagent-limits.md)     | Límites de paralelismo agéntico (I-14)         | Accepted | I-14       | 2026-05-07 |
+| [ADR-012](./ADR-012-clickhouse-gce-self-hosted.md)   | ClickHouse self-hosted en GCE para PRO         | Accepted | —          | 2026-05-08 |
 
 ## Convención de formato
 

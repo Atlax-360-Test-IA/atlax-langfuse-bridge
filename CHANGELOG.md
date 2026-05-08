@@ -38,6 +38,29 @@ Semver retroactivo. Política:
 
 - ADR-008 documentando límites de recuperabilidad y lecciones del incidente 22-Apr-2026
 
+### PRO Deployment Plan — Decisión arquitectónica + plan formal (2026-05-08)
+
+Tras la validación intensiva del Paso 2, se diseña el despliegue PRO en Cloud Run europe-west1. Investigación exhaustiva con 2 agentes paralelos contra fuentes oficiales (ClickHouse Cloud, Aiven, GCE pricing, Langfuse self-hosting docs).
+
+**Decisión clave** (formalizada en [ADR-012](docs/adr/ADR-012-clickhouse-gce-self-hosted.md)): **ClickHouse self-hosted en GCE VM** (n2-highmem-4 + 200 GB pd-ssd) en europe-west1, no ClickHouse Cloud (cross-region europe-west4 + complejidad PSC) ni Aiven (precio no transparente). Razón decisiva: misma región que Cloud Run + no requiere modificar `vpc-access-egress: private-ranges-only`.
+
+**Decisiones del usuario** (registradas en plan):
+
+- Versión: `v0.6.0-wip` durante PRO ramp-up; `v1.0.0` solo cuando piloto exitoso (≥3 devs × 2 semanas)
+- `minScale=0` en web (cold start aceptado, ahorra ~$60-80/mes idle); `minScale=1` en worker (BullMQ poll loop)
+- Dominio custom `langfuse.atlax360.com` desde día 1 con Cloud LB + Cloud Armor + cert managed
+- Plan formal escrito + ejecución stage-by-stage con checkpoints
+
+**Artefactos creados**:
+
+- `docs/adr/ADR-012-clickhouse-gce-self-hosted.md` — decisión formal
+- `docs/operations/cloud-run-deployment-plan.md` — plan ejecutable de 5 fases con checklists, rollback plan, coste estimado (~$480-540/mes total), riesgos top 5
+- `infra/cloud-run.yaml` actualizado con 11 cambios consolidados de la auditoría 360º (Direct VPC egress, Private IP Postgres, OTEL*SDK_DISABLED, gen2 execution environment, healthcheck timeouts ajustados, S3_MEDIA_UPLOAD*\*, minScale 0/1 según servicio)
+- `infra/provision-pro.sh` — script idempotente de provisioning (VPC, subnets, Cloud SQL, Memorystore, GCS, GCE ClickHouse, Service Accounts, Secret Manager). Soporta `--dry-run` y `--skip-*` por sección
+- `docs/adr/README.md` actualizado con entrada ADR-012
+
+**No ejecutado en este PR** (solo planificación): el provisioning real requiere proyecto GCP con billing + dominio + ventana operativa de 1-2 días. Ejecución bajo modo auto stage-by-stage cuando se reinicie sesión con credenciales GCP listas.
+
 ### Fix Paso-2 — Bug crítico de cost reconciliation descubierto en validación (2026-05-08)
 
 Durante la validación funcional intensiva (Paso 2 post-auditoría) se descubrió un bug silencioso en `scripts/reconcile-traces.ts:reconcileCostAgainstAnthropic()`:

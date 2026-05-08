@@ -1,21 +1,22 @@
-# cloud-run.yaml — REFERENCE manifest for migrating Langfuse v3 to Cloud Run.
+# cloud-run.yaml — Langfuse v3 manifest para Cloud Run (europe-west1).
 #
-# === STATUS: REFERENCE ONLY — NOT APPLIED IN CI =============================
+# === STATUS: REFERENCE — render with envsubst before `gcloud run services replace` =====
 #
-# This file documents the target topology for PRO migration (see CLAUDE.md
-# invariant I-13 for what stays local vs what moves to Cloud Run).
+# Manifest target para PRO migration. Decisiones formales:
+#   - I-13 (ADR-002): hook/reconciler/discovery NUNCA migran a Cloud Run
+#   - ADR-012: ClickHouse self-hosted en GCE VM (europe-west1, IP privada 10.20.10.20)
+#   - Plan formal: docs/operations/cloud-run-deployment-plan.md
 #
-# Two Cloud Run services: langfuse-web (HTTP API + UI) and langfuse-worker
-# (background event processor). Both share the same connections to Cloud SQL,
-# Memorystore, ClickHouse Cloud, and GCS.
+# Variables que envsubst reemplaza al render (ver provision-pro.sh):
+#   $GCP_PROJECT_ID         — id del proyecto GCP (ej. atlax-langfuse-prod)
+#   $LANGFUSE_VERSION       — versión de la imagen langfuse (ej. 3.172.1)
 #
-# To deploy (when ready):
-#   1. Create Cloud SQL Postgres instance with PITR enabled (see backup-story.md)
-#   2. Provision Memorystore Redis (Standard tier, ≥1 GB for HA)
-#   3. Provision ClickHouse Cloud OR self-host on GKE with BACKUP TO S3
-#   4. Create GCS bucket with Object Versioning + 90-day lifecycle policy
-#   5. Store all secrets in Secret Manager (NEVER in this YAML)
-#   6. gcloud run services replace cloud-run.yaml
+# To deploy:
+#   envsubst < infra/cloud-run.yaml > /tmp/cloud-run.rendered.yaml
+#   gcloud run services replace /tmp/cloud-run.rendered.yaml --region=europe-west1
+#   # Promote (después de validar):
+#   gcloud run services update-traffic langfuse-web   --to-revisions=LATEST=100 --region=europe-west1
+#   gcloud run services update-traffic langfuse-worker --to-revisions=LATEST=100 --region=europe-west1
 #
 # What CANNOT migrate to Cloud Run (per invariant I-13):
 #   - hooks/langfuse-sync.ts        — needs filesystem access to JSONLs
@@ -24,8 +25,18 @@
 #   - scripts/backup-langfuse.sh    — uses docker exec (and refuses to run via K_SERVICE guard)
 #   - browser-extension/            — runs in dev's Chrome
 #
-# These remain on each developer's machine. The hook posts to LANGFUSE_HOST
-# pointing at the Cloud Run URL.
+# Cambios respecto al manifest pre-2026-05-08 (auditoría 360º):
+#   1. vpc-access-connector → network-interfaces (Direct VPC egress, GA)
+#   2. Eliminado cloudsql-instances (Postgres via Private IP en mismo VPC)
+#   3. livenessProbe.periodSeconds 30→60, failureThreshold 3 (UI hace SSE largos)
+#   4. timeoutSeconds web 60→300 (export/eval pueden tardar)
+#   5. Añadidos LANGFUSE_S3_MEDIA_UPLOAD_* (faltaban respecto a docker-compose)
+#   6. OTEL_SDK_DISABLED=true hasta decidir Cloud Trace
+#   7. SAs verificadas sin roles/owner heredado
+#   8. execution-environment: gen2 explícito
+#   9. --no-traffic en deploy (tráfico se promueve por separado)
+#  10. web minScale=0 + cpu-throttling=true (cold start aceptado por usuario, ahorra ~$60-80/mes)
+#  11. worker minScale=1 + cpu-throttling=false (BullMQ poll loop necesita CPU continua)
 
 ---
 apiVersion: serving.knative.dev/v1
@@ -36,26 +47,30 @@ metadata:
     cloud.googleapis.com/location: europe-west1
   annotations:
     run.googleapis.com/launch-stage: GA
+    # Direct VPC egress (GA, sustituye a Serverless VPC Access connector legacy)
+    run.googleapis.com/ingress: all
 spec:
   template:
     metadata:
       annotations:
-        # CPU always allocated — required for the worker mode and SSE responses.
-        run.googleapis.com/cpu-throttling: "false"
-        # Min instances = 1 to avoid cold starts during dev hours (38 devs).
-        autoscaling.knative.dev/minScale: "1"
+        # Execution environment gen2 — necesario para Direct VPC egress + probes
+        run.googleapis.com/execution-environment: gen2
+        # CPU throttling ON (default) → permite minScale=0
+        # Trade-off: cold start del primer request del día (30-60s)
+        run.googleapis.com/cpu-throttling: "true"
+        # Decisión usuario 2026-05-08: minScale=0 ahorra ~$60-80/mes idle billing
+        autoscaling.knative.dev/minScale: "0"
         autoscaling.knative.dev/maxScale: "10"
-        # Cloud SQL connection via Unix socket (preferred over TCP).
-        run.googleapis.com/cloudsql-instances: PROJECT:europe-west1:langfuse-pg
-        # VPC connector for Memorystore + ClickHouse private endpoint.
-        run.googleapis.com/vpc-access-connector: projects/PROJECT/locations/europe-west1/connectors/langfuse-vpc
+        # Direct VPC egress: el servicio inyecta una NIC en subnet-run-egress
+        run.googleapis.com/network-interfaces: '[{"network":"vpc-langfuse","subnetwork":"subnet-run-egress","tags":["langfuse-egress"]}]'
         run.googleapis.com/vpc-access-egress: private-ranges-only
     spec:
-      serviceAccountName: langfuse-web@PROJECT.iam.gserviceaccount.com
+      serviceAccountName: langfuse-web@${GCP_PROJECT_ID}.iam.gserviceaccount.com
       containerConcurrency: 80
-      timeoutSeconds: 60
+      # web puede tardar en endpoints de export/eval; subido de 60→300
+      timeoutSeconds: 300
       containers:
-        - image: langfuse/langfuse:3.171.0
+        - image: langfuse/langfuse:${LANGFUSE_VERSION}
           ports:
             - name: http1
               containerPort: 3000
@@ -63,7 +78,8 @@ spec:
             limits:
               cpu: "2"
               memory: 2Gi
-          # Healthcheck — Langfuse exposes /api/public/health.
+          # Healthcheck — Langfuse expone /api/public/health
+          # 150s tolerancia arranque (Prisma migrations + ClickHouse init + S3 connect)
           startupProbe:
             httpGet:
               path: /api/public/health
@@ -72,21 +88,23 @@ spec:
             periodSeconds: 5
             failureThreshold: 30
             timeoutSeconds: 5
+          # Liveness más relajado (60s/3 = 180s offline antes de kill)
+          # SSE streams largos en UI compiten con probes — evitar kills falsos
           livenessProbe:
             httpGet:
               path: /api/public/health
               port: 3000
-            periodSeconds: 30
+            periodSeconds: 60
             failureThreshold: 3
             timeoutSeconds: 5
           env:
-            # Database — Cloud SQL via socket
+            # ── Postgres (Cloud SQL, Private IP via Direct VPC) ──
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: langfuse-database-url
                   key: latest
-            # Redis — Memorystore private IP
+            # ── Redis (Memorystore, private IP, AUTH + TLS) ──
             - name: REDIS_HOST
               valueFrom:
                 secretKeyRef:
@@ -99,11 +117,16 @@ spec:
                 secretKeyRef:
                   name: langfuse-redis-auth
                   key: latest
-            # ClickHouse — separate cluster
+            # ── ClickHouse (GCE self-hosted, ADR-012, IP privada 10.20.10.20) ──
             - name: CLICKHOUSE_URL
               valueFrom:
                 secretKeyRef:
                   name: langfuse-clickhouse-url
+                  key: latest
+            - name: CLICKHOUSE_MIGRATION_URL
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-clickhouse-migration-url
                   key: latest
             - name: CLICKHOUSE_USER
               value: default
@@ -112,7 +135,11 @@ spec:
                 secretKeyRef:
                   name: langfuse-clickhouse-password
                   key: latest
-            # S3 → GCS bucket with HMAC keys
+            - name: CLICKHOUSE_CLUSTER_ENABLED
+              value: "false"
+            - name: CLICKHOUSE_MIGRATION_SSL
+              value: "false"
+            # ── S3 events bucket (atlax-langfuse-events vía GCS HMAC) ──
             - name: LANGFUSE_S3_EVENT_UPLOAD_BUCKET
               value: atlax-langfuse-events
             - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
@@ -131,7 +158,29 @@ spec:
                 secretKeyRef:
                   name: langfuse-gcs-hmac-secret
                   key: latest
-            # Auth secrets
+            # ── S3 media bucket (uploads UI: avatares, exports manuales) ──
+            # Faltaba en el manifest pre-auditoría — añadido cambio #5
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_BUCKET
+              value: atlax-langfuse-media
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_REGION
+              value: europe-west1
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT
+              value: https://storage.googleapis.com
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE
+              value: "true"
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-gcs-hmac-id
+                  key: latest
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-gcs-hmac-secret
+                  key: latest
+            # ── Auth secrets (NUNCA rotar — invalida sesiones / API keys) ──
+            - name: NEXTAUTH_URL
+              value: https://langfuse.atlax360.com
             - name: NEXTAUTH_SECRET
               valueFrom:
                 secretKeyRef:
@@ -147,10 +196,14 @@ spec:
                 secretKeyRef:
                   name: langfuse-encryption-key
                   key: latest
-            # Telemetry off in PRO until reviewed by legal/compliance
+            # ── Telemetry & OTel ──
             - name: TELEMETRY_ENABLED
               value: "false"
+            - name: OTEL_SDK_DISABLED
+              value: "true"
   traffic:
+    # Deploy con --no-traffic (LATEST=0%); promoción manual con update-traffic.
+    # En el primer deploy el manifest declara LATEST=100 para arranque.
     - percent: 100
       latestRevision: true
 
@@ -161,23 +214,29 @@ metadata:
   name: langfuse-worker
   labels:
     cloud.googleapis.com/location: europe-west1
+  annotations:
+    run.googleapis.com/launch-stage: GA
+    # Worker NO recibe tráfico HTTP de devs — sólo healthchecks internos
+    run.googleapis.com/ingress: internal
 spec:
   template:
     metadata:
       annotations:
+        run.googleapis.com/execution-environment: gen2
+        # cpu-throttling=false: BullMQ poll loop sobre Redis necesita CPU continua
+        # entre healthchecks. Con cpu-throttling=true los jobs se atrasarían.
         run.googleapis.com/cpu-throttling: "false"
-        # Worker is event-driven: keep ≥1 alive for low-latency processing.
+        # Worker SIEMPRE warm: minScale=1 (necesario con cpu-throttling=false)
         autoscaling.knative.dev/minScale: "1"
         autoscaling.knative.dev/maxScale: "5"
-        run.googleapis.com/cloudsql-instances: PROJECT:europe-west1:langfuse-pg
-        run.googleapis.com/vpc-access-connector: projects/PROJECT/locations/europe-west1/connectors/langfuse-vpc
+        run.googleapis.com/network-interfaces: '[{"network":"vpc-langfuse","subnetwork":"subnet-run-egress","tags":["langfuse-egress"]}]'
         run.googleapis.com/vpc-access-egress: private-ranges-only
     spec:
-      serviceAccountName: langfuse-worker@PROJECT.iam.gserviceaccount.com
+      serviceAccountName: langfuse-worker@${GCP_PROJECT_ID}.iam.gserviceaccount.com
       containerConcurrency: 1
       timeoutSeconds: 300
       containers:
-        - image: langfuse/langfuse-worker:3.171.0
+        - image: langfuse/langfuse-worker:${LANGFUSE_VERSION}
           ports:
             - name: http1
               containerPort: 3030
@@ -192,12 +251,14 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 5
             failureThreshold: 30
+            timeoutSeconds: 5
           livenessProbe:
             httpGet:
               path: /api/health
               port: 3030
-            periodSeconds: 30
+            periodSeconds: 60
             failureThreshold: 3
+            timeoutSeconds: 5
           env:
             - name: DATABASE_URL
               valueFrom:
@@ -221,6 +282,11 @@ spec:
                 secretKeyRef:
                   name: langfuse-clickhouse-url
                   key: latest
+            - name: CLICKHOUSE_MIGRATION_URL
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-clickhouse-migration-url
+                  key: latest
             - name: CLICKHOUSE_USER
               value: default
             - name: CLICKHOUSE_PASSWORD
@@ -228,6 +294,10 @@ spec:
                 secretKeyRef:
                   name: langfuse-clickhouse-password
                   key: latest
+            - name: CLICKHOUSE_CLUSTER_ENABLED
+              value: "false"
+            - name: CLICKHOUSE_MIGRATION_SSL
+              value: "false"
             - name: LANGFUSE_S3_EVENT_UPLOAD_BUCKET
               value: atlax-langfuse-events
             - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
@@ -246,6 +316,24 @@ spec:
                 secretKeyRef:
                   name: langfuse-gcs-hmac-secret
                   key: latest
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_BUCKET
+              value: atlax-langfuse-media
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_REGION
+              value: europe-west1
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT
+              value: https://storage.googleapis.com
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE
+              value: "true"
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-gcs-hmac-id
+                  key: latest
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: langfuse-gcs-hmac-secret
+                  key: latest
             - name: SALT
               valueFrom:
                 secretKeyRef:
@@ -258,8 +346,8 @@ spec:
                   key: latest
             - name: TELEMETRY_ENABLED
               value: "false"
-            - name: CLICKHOUSE_CLUSTER_ENABLED
-              value: "false"
+            - name: OTEL_SDK_DISABLED
+              value: "true"
   traffic:
     - percent: 100
       latestRevision: true
