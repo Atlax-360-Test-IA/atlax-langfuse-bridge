@@ -180,7 +180,7 @@ spec:
                   key: latest
             # ── Auth secrets (NUNCA rotar — invalida sesiones / API keys) ──
             - name: NEXTAUTH_URL
-              value: https://langfuse.atlax360.com
+              value: https://langfuse.atlax360.ai
             - name: NEXTAUTH_SECRET
               valueFrom:
                 secretKeyRef:

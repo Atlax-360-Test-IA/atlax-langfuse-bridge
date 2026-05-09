@@ -1,7 +1,7 @@
 # Plan de Despliegue PRO — Langfuse v3 en Cloud Run
 
 > **Status**: Plan formal, aprobado 2026-05-08. Ejecución stage-by-stage con checkpoints.
-> **Decisiones clave fijadas**: GCE self-hosted ClickHouse ([ADR-012](../adr/ADR-012-clickhouse-gce-self-hosted.md)), `minScale=0` en web (cold start aceptado), `minScale=1` en worker (BullMQ loop), dominio custom `langfuse.atlax360.com` desde día 1, `vpc-access-egress: private-ranges-only` mantenido.
+> **Decisiones clave fijadas**: GCE self-hosted ClickHouse ([ADR-012](../adr/ADR-012-clickhouse-gce-self-hosted.md)), `minScale=0` en web (cold start aceptado), `minScale=1` en worker (BullMQ loop), dominio custom `langfuse.atlax360.ai` desde día 1, `vpc-access-egress: private-ranges-only` mantenido.
 
 > 📖 **Referencias**: [`infra/cloud-run.yaml`](../../infra/cloud-run.yaml), [`infra/backup-story.md`](../../infra/backup-story.md), [`infra/provision-pro.sh`](../../infra/provision-pro.sh), [ADR-002](../adr/ADR-002-edge-core-split.md) (I-13).
 
@@ -26,13 +26,13 @@ Despliegue de la stack Langfuse v3 (web + worker) en Google Cloud Run en `europe
 ```
               38 devs (laptops)                                Operadores Atlax
                   │                                                  │
-                  │  HTTPS POST /api/public/ingestion                │  https://langfuse.atlax360.com
+                  │  HTTPS POST /api/public/ingestion                │  https://langfuse.atlax360.ai
                   ▼                                                  ▼
         ┌────────────────────────────────────────────────────────────────────────┐
         │  Google Cloud Load Balancer (HTTPS, regional + global SSL cert)        │
         │   ─ Serverless NEG → langfuse-web                                      │
         │   ─ Cloud Armor: rate-limit 1000 req/min/IP, geo EU+sede               │
-        │   ─ Managed cert: langfuse.atlax360.com                                │
+        │   ─ Managed cert: langfuse.atlax360.ai                                │
         └────────────────────────────────────────────────────────────────────────┘
                                           │
                               ┌───────────┴───────────┐
@@ -78,7 +78,7 @@ Despliegue de la stack Langfuse v3 (web + worker) en Google Cloud Run en `europe
 
         FUERA DEL CLOUD (I-13):
         Cada laptop dev: hook + reconciler + detect-tier + browser-extension.
-        Salida: HTTPS POST → langfuse.atlax360.com
+        Salida: HTTPS POST → langfuse.atlax360.ai
 ```
 
 ---
@@ -114,7 +114,7 @@ Antes de empezar la F1:
 | Proyecto GCP creado con billing habilitado                                                                                                                                     | `gcloud projects describe $GCP_PROJECT_ID`                                        |
 | Usuario con `roles/owner` en el proyecto (sólo para provisioning inicial)                                                                                                      | `gcloud projects get-iam-policy $GCP_PROJECT_ID`                                  |
 | APIs habilitadas: `compute`, `run`, `sql-admin`, `redis`, `secretmanager`, `cloudscheduler`, `vpcaccess`, `servicenetworking`, `storage`, `certificatemanager`, `compute` (LB) | `gcloud services list --enabled`                                                  |
-| Dominio `atlax360.com` con acceso DNS (Cloudflare/Google Domains/Route53) para crear `langfuse.atlax360.com`                                                                   | El operador conoce el provider DNS                                                |
+| Dominio `atlax360.ai` con acceso DNS (panel DonDominio — `dns1.dondominio.com`/`dns2.dondominio.com`) para crear registro A `langfuse.atlax360.ai`                             | El operador conoce el provider DNS                                                |
 | Backup actualizado de la instancia docker-compose actual                                                                                                                       | `bash scripts/backup-langfuse.sh` ejecutado <24h atrás                            |
 | Credenciales Anthropic Admin API funcionando (verificadas en Paso 2)                                                                                                           | `~/.atlax-ai/reconcile.env` contiene `ANTHROPIC_ADMIN_API_KEY=sk-ant-admin01-...` |
 | Cuenta de email para el primer admin de Langfuse                                                                                                                               | Decidido (típicamente `jgcalvo@atlax360.com`)                                     |
@@ -125,7 +125,7 @@ Antes de empezar la F1:
 export GCP_PROJECT_ID="atlax-langfuse-prod"      # o como se llame el proyecto
 export GCP_REGION="europe-west1"
 export GCP_ZONE="europe-west1-b"
-export DOMAIN="langfuse.atlax360.com"
+export DOMAIN="langfuse.atlax360.ai"
 ```
 
 ---
@@ -555,7 +555,7 @@ bun run scripts/smoke-mcp-e2e.ts
 
 ## 7. Fase 4 — Custom domain + Cloud Armor
 
-**Objetivo**: poner `langfuse.atlax360.com` con TLS managed y rate-limit.
+**Objetivo**: poner `langfuse.atlax360.ai` con TLS managed y rate-limit.
 
 **Tiempo estimado**: 1-2 horas (la mayoría es esperar a que el cert SSL managed se aprovisione, ~30 min).
 
@@ -566,7 +566,7 @@ gcloud compute addresses create ip-langfuse-lb --global
 
 CERT_NAME="cert-langfuse"
 gcloud certificate-manager certificates create $CERT_NAME \
-  --domains="langfuse.atlax360.com"
+  --domains="langfuse.atlax360.ai"
 ```
 
 ### 7.2 Apuntar DNS
@@ -643,7 +643,7 @@ gcloud compute backend-services update bs-langfuse \
   --security-policy=armor-langfuse
 ```
 
-**Checkpoint**: `curl -I https://langfuse.atlax360.com/api/public/health` retorna `HTTP/2 200`.
+**Checkpoint**: `curl -I https://langfuse.atlax360.ai/api/public/health` retorna `HTTP/2 200`.
 
 ---
 
@@ -660,10 +660,10 @@ gcloud compute backend-services update bs-langfuse \
 cp ~/.atlax-ai/reconcile.env ~/.atlax-ai/reconcile.env.bak.$(date +%Y%m%d)
 
 # Apuntar al PRO
-sed -i 's|LANGFUSE_HOST=.*|LANGFUSE_HOST=https://langfuse.atlax360.com|' ~/.atlax-ai/reconcile.env
+sed -i 's|LANGFUSE_HOST=.*|LANGFUSE_HOST=https://langfuse.atlax360.ai|' ~/.atlax-ai/reconcile.env
 
 # Si las pk-lf/sk-lf nuevas son distintas (Langfuse PRO genera projects nuevos):
-# 1. Login en https://langfuse.atlax360.com con LANGFUSE_INIT_ADMIN_*
+# 1. Login en https://langfuse.atlax360.ai con LANGFUSE_INIT_ADMIN_*
 # 2. Crear proyecto "atlax-claude"
 # 3. Copiar pk-lf-... y sk-lf-... a ~/.atlax-ai/reconcile.env
 
@@ -673,12 +673,12 @@ systemctl --user restart atlax-langfuse-reconcile.timer
 
 ### 8.2 Smoke con sesión real
 
-Cerrar una sesión Claude Code corta y verificar que aparece en `https://langfuse.atlax360.com`:
+Cerrar una sesión Claude Code corta y verificar que aparece en `https://langfuse.atlax360.ai`:
 
 ```bash
 # Esperar 1 min, luego:
 curl -s -u "$LANGFUSE_PUBLIC_KEY:$LANGFUSE_SECRET_KEY" \
-  https://langfuse.atlax360.com/api/public/traces?limit=5 \
+  https://langfuse.atlax360.ai/api/public/traces?limit=5 \
   | jq '.data[].name'
 ```
 
@@ -687,7 +687,7 @@ curl -s -u "$LANGFUSE_PUBLIC_KEY:$LANGFUSE_SECRET_KEY" \
 ### 8.3 Validación intensiva (re-ejecutar Paso 2)
 
 ```bash
-LANGFUSE_HOST=https://langfuse.atlax360.com bun run /tmp/atlax-validation/validate-consistency.ts
+LANGFUSE_HOST=https://langfuse.atlax360.ai bun run /tmp/atlax-validation/validate-consistency.ts
 ```
 
 **Esperado**: 0 issues críticos. TURNS_DRIFT en sesiones activas es esperado (2-layer consistency).
@@ -699,7 +699,7 @@ Para cada dev del piloto:
 ```bash
 # El dev ejecuta:
 bash setup/setup.sh \
-  "https://langfuse.atlax360.com" \
+  "https://langfuse.atlax360.ai" \
   "<pk-lf-su-clave>" \
   "<sk-lf-su-clave>"
 ```
@@ -835,12 +835,12 @@ Antes de declarar la migración completa:
 - [ ] F3 — `*.run.app/api/public/health` retorna 200
 - [ ] F3 — Smoke E2E (`scripts/smoke-mcp-e2e.ts`) exit 0
 - [ ] F3 — Promoción `update-traffic LATEST=100` aplicada
-- [ ] F4 — DNS `langfuse.atlax360.com` resuelve a la IP del LB
+- [ ] F4 — DNS `langfuse.atlax360.ai` resuelve a la IP del LB
 - [ ] F4 — Cert managed en estado `ACTIVE`
-- [ ] F4 — `https://langfuse.atlax360.com/api/public/health` retorna 200
+- [ ] F4 — `https://langfuse.atlax360.ai/api/public/health` retorna 200
 - [ ] F4 — Cloud Armor policy aplicada y verificada con un curl desde IP fuera de EU
 - [ ] F5 — `~/.atlax-ai/reconcile.env` de jgcalvo apunta a PRO
-- [ ] F5 — Sesión Claude Code reciente aparece en `langfuse.atlax360.com`
+- [ ] F5 — Sesión Claude Code reciente aparece en `langfuse.atlax360.ai`
 - [ ] F5 — Validación Paso 2 ejecutada contra PRO con 0 issues críticos
 - [ ] F5 — Cloud Scheduler jobs (backup, drill) creados
 - [ ] F5 — Bridge-health trace `status:ok` durante 24h

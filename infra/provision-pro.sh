@@ -19,14 +19,18 @@
 #   export GCP_PROJECT_ID=atlax-langfuse-prod
 #   export GCP_REGION=europe-west1
 #   export GCP_ZONE=europe-west1-b
-#   export DOMAIN=langfuse.atlax360.com
+#   export DOMAIN=langfuse.atlax360.ai
+#   export GCP_BILLING_ACCOUNT=01596F-DD220B-DCE2D3   # Atlax360 - Devoteam
+#   export GCP_FOLDER_ID=59888934980                  # folder atlax-ai (opcional)
 #   bash infra/provision-pro.sh --dry-run     # preview
 #   bash infra/provision-pro.sh                # ejecuta
 #   bash infra/provision-pro.sh --skip-vpc     # saltarse pasos ya hechos
+#   bash infra/provision-pro.sh --create-project   # crear el proyecto si no existe
 
 set -euo pipefail
 
 DRY_RUN=false
+CREATE_PROJECT=false
 SKIP_VPC=false
 SKIP_SQL=false
 SKIP_REDIS=false
@@ -38,6 +42,7 @@ SKIP_SECRETS=false
 for arg in "$@"; do
   case $arg in
     --dry-run) DRY_RUN=true ;;
+    --create-project) CREATE_PROJECT=true ;;
     --skip-vpc) SKIP_VPC=true ;;
     --skip-sql) SKIP_SQL=true ;;
     --skip-redis) SKIP_REDIS=true ;;
@@ -61,7 +66,7 @@ done
 : "${GCP_PROJECT_ID:?Set GCP_PROJECT_ID}"
 : "${GCP_REGION:?Set GCP_REGION}"
 : "${GCP_ZONE:?Set GCP_ZONE}"
-: "${DOMAIN:?Set DOMAIN (e.g. langfuse.atlax360.com)}"
+: "${DOMAIN:?Set DOMAIN (e.g. langfuse.atlax360.ai)}"
 
 if ! command -v gcloud >/dev/null; then
   echo "gcloud not found. Install: https://cloud.google.com/sdk/docs/install" >&2
@@ -79,14 +84,62 @@ run() {
 }
 
 # Predicate helper — exit 0 if resource exists, else 1
+# En dry-run con proyecto inexistente, devuelve siempre "no existe" (1)
+# para que el script muestre todos los `would create`.
 exists() {
+  if [[ "$DRY_RUN" == "true" ]]; then
+    if ! gcloud projects describe "$GCP_PROJECT_ID" >/dev/null 2>&1; then
+      return 1
+    fi
+  fi
   if eval "$1" >/dev/null 2>&1; then return 0; else return 1; fi
 }
 
 log() { echo "[provision] $*"; }
 
 log "Project=$GCP_PROJECT_ID Region=$GCP_REGION Zone=$GCP_ZONE Domain=$DOMAIN"
-log "DRY_RUN=$DRY_RUN"
+log "DRY_RUN=$DRY_RUN CREATE_PROJECT=$CREATE_PROJECT"
+
+# ── 0. Crear proyecto + asignar billing (opt-in con --create-project) ────────
+
+if [[ "$CREATE_PROJECT" == "true" ]]; then
+  if exists "gcloud projects describe $GCP_PROJECT_ID"; then
+    log "Project $GCP_PROJECT_ID already exists, skipping creation"
+  else
+    log "Creating project $GCP_PROJECT_ID..."
+    if [[ -n "${GCP_FOLDER_ID:-}" ]]; then
+      run gcloud projects create "$GCP_PROJECT_ID" \
+        --name="$GCP_PROJECT_ID" \
+        --folder="$GCP_FOLDER_ID"
+    else
+      run gcloud projects create "$GCP_PROJECT_ID" \
+        --name="$GCP_PROJECT_ID"
+    fi
+
+    if [[ -n "${GCP_BILLING_ACCOUNT:-}" ]]; then
+      log "Linking billing account $GCP_BILLING_ACCOUNT..."
+      run gcloud billing projects link "$GCP_PROJECT_ID" \
+        --billing-account="$GCP_BILLING_ACCOUNT"
+    else
+      log "WARN: GCP_BILLING_ACCOUNT not set — link manually:"
+      log "  gcloud billing projects link $GCP_PROJECT_ID --billing-account=<id>"
+    fi
+  fi
+fi
+
+# Verify project + billing antes de continuar (a menos que --dry-run)
+if [[ "$DRY_RUN" != "true" ]]; then
+  if ! exists "gcloud projects describe $GCP_PROJECT_ID"; then
+    log "ERROR: project $GCP_PROJECT_ID does not exist."
+    log "  Run with --create-project to create it, or create it manually."
+    exit 1
+  fi
+  if ! gcloud billing projects describe "$GCP_PROJECT_ID" --format='value(billingEnabled)' 2>/dev/null | grep -q True; then
+    log "ERROR: billing not enabled on $GCP_PROJECT_ID"
+    log "  Link a billing account: gcloud billing projects link $GCP_PROJECT_ID --billing-account=<id>"
+    exit 1
+  fi
+fi
 
 # ── 1. APIs (requieren ya habilitadas — verificar) ──────────────────────────
 
@@ -107,7 +160,13 @@ for api in \
   iamcredentials.googleapis.com \
   cloudbuild.googleapis.com
 do
-  if ! gcloud services list --project="$GCP_PROJECT_ID" --enabled --format='value(config.name)' | grep -q "^${api}$"; then
+  if [[ "$DRY_RUN" == "true" ]] && ! exists "gcloud projects describe $GCP_PROJECT_ID"; then
+    # En dry-run con proyecto inexistente, asumir que todas las APIs hay que habilitar
+    log "Would enable $api (project doesn't exist yet in dry-run)"
+    run gcloud services enable "$api" --project="$GCP_PROJECT_ID"
+    continue
+  fi
+  if ! gcloud services list --project="$GCP_PROJECT_ID" --enabled --format='value(config.name)' 2>/dev/null | grep -q "^${api}$"; then
     log "Enabling $api..."
     run gcloud services enable "$api" --project="$GCP_PROJECT_ID"
   fi
