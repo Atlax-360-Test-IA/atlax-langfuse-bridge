@@ -554,10 +554,14 @@ if [[ "$SKIP_IAM" != "true" ]]; then
 
   log "HMAC key for langfuse-gcs-hmac..."
   if [[ "$DRY_RUN" != "true" ]]; then
-    if ! gcloud storage hmac list --project="$GCP_PROJECT_ID" --filter="serviceAccountEmail=langfuse-gcs-hmac@$GCP_PROJECT_ID.iam.gserviceaccount.com" --format='value(accessId)' | grep -q .; then
-      gcloud storage hmac create \
+    HMAC_SA="langfuse-gcs-hmac@$GCP_PROJECT_ID.iam.gserviceaccount.com"
+    # `gcloud storage hmac list` no acepta filter por serviceAccountEmail;
+    # usamos --format con grep para detectar HMAC existente del SA.
+    if ! gcloud storage hmac list --project="$GCP_PROJECT_ID" --format='value(serviceAccountEmail)' 2>/dev/null | grep -q "^${HMAC_SA}$"; then
+      # `gcloud storage hmac create` toma el SA como POSITIONAL arg, no --service-account
+      gcloud storage hmac create "$HMAC_SA" \
         --project="$GCP_PROJECT_ID" \
-        --service-account="langfuse-gcs-hmac@$GCP_PROJECT_ID.iam.gserviceaccount.com" > /tmp/hmac.json
+        --format=json > /tmp/hmac.json
       HMAC_ID=$(jq -r '.metadata.accessId' /tmp/hmac.json)
       HMAC_SECRET=$(jq -r '.secret' /tmp/hmac.json)
       shred -u /tmp/hmac.json 2>/dev/null || rm -f /tmp/hmac.json
