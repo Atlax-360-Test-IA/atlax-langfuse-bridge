@@ -69,6 +69,21 @@ const REQUIRED_PATHS: Array<{ path: string; section: string }> = [
   { path: "docs/operations/runbook.md", section: "§4 map" },
   { path: "infra/backup-story.md", section: "§9 PRO + §12 GAP-P02" },
 
+  // Shared Platform alignment (PR #73)
+  {
+    path: "docs/audits/shared-platform-validation-2026-05-09.md",
+    section: "§9 PRO — audit Shared Platform v0.3",
+  },
+  {
+    path: "scripts/ops/PRO_ENV_VARS.md",
+    section: "§8 env vars — inventario formal",
+  },
+  { path: "infra/provision-pro.sh", section: "§9 PRO provisioning" },
+  {
+    path: "docs/operations/cloud-run-deployment-plan.md",
+    section: "§9 PRO plan F1-F5",
+  },
+
   // docker
   { path: "docker/docker-compose.yml", section: "§2 Stack / §14 R-3" },
 ];
