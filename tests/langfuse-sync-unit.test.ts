@@ -322,11 +322,23 @@ describe("detectOS", () => {
     expect(["linux", "wsl", "macos", "windows"]).toContain(name);
   });
 
-  test("returns wsl on this WSL2 environment", () => {
-    // This test runs on the developer's WSL2 machine — /proc/version contains "microsoft"
-    // On non-WSL Linux CI it would return "linux" — guard appropriately
+  test("returns the OS matching process.platform", () => {
+    // Contract test parametrizado por process.platform:
+    // - darwin       → "macos"
+    // - linux + WSL  → "wsl"  (/proc/version contiene "microsoft")
+    // - linux        → "linux"
+    // - win32        → "windows"
     const result = detectOS();
-    // On WSL2 the result should be "wsl"; on standard Linux "linux"
-    expect(result === "wsl" || result === "linux").toBe(true);
+    if (process.platform === "darwin") {
+      expect(result).toBe("macos");
+    } else if (process.platform === "win32") {
+      expect(result).toBe("windows");
+    } else if (process.platform === "linux") {
+      // En Linux CI puede ser "linux" o "wsl" según /proc/version del runner
+      expect(result === "wsl" || result === "linux").toBe(true);
+    } else {
+      // Otras plataformas no soportadas formalmente — al menos debe ser un OSName válido
+      expect(["linux", "wsl", "macos", "windows"]).toContain(result);
+    }
   });
 });
