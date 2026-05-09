@@ -213,12 +213,18 @@ if [[ "$SKIP_VPC" != "true" ]]; then
   done
 
   log "Private Services Access for Cloud SQL..."
+  # CIDR /20 requires aligned boundaries (multiples of 16 in the third octet).
+  # 10.20.96.0/20 covers 10.20.96.0–10.20.111.255 — no overlap with subnets:
+  #   subnet-run-egress 10.20.0.0/24
+  #   subnet-data       10.20.10.0/24
+  #   subnet-jobs       10.20.20.0/24
+  # Cloud SQL will auto-assign IPs from this range (typically .3).
   if ! exists "gcloud compute addresses describe google-managed-services-vpc-langfuse --global --project=$GCP_PROJECT_ID"; then
     run gcloud compute addresses create google-managed-services-vpc-langfuse \
       --project="$GCP_PROJECT_ID" \
       --global \
       --purpose=VPC_PEERING \
-      --addresses=10.20.100.0 \
+      --addresses=10.20.96.0 \
       --prefix-length=20 \
       --network=vpc-langfuse
     run gcloud services vpc-peerings connect \
@@ -326,7 +332,7 @@ if [[ "$SKIP_SQL" != "true" ]]; then
       --project="$GCP_PROJECT_ID" \
       --password="$SQL_USER_PASS"
     log "Creating secret langfuse-database-url..."
-    SQL_HOST=$(gcloud sql instances describe langfuse-pg --project="$GCP_PROJECT_ID" --format='value(ipAddresses[0].ipAddress)' || echo "10.20.100.3")
+    SQL_HOST=$(gcloud sql instances describe langfuse-pg --project="$GCP_PROJECT_ID" --format='value(ipAddresses[0].ipAddress)' || echo "10.20.96.3")
     # connection_limit=10 evita pool exhaustion en db-custom-1-3840
     # (~25 conexiones max). Cloud Run web (concurrency=80) + worker
     # (concurrency=1, minScale=1) requieren pool conservador.
