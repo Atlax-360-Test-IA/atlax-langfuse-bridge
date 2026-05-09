@@ -187,13 +187,13 @@
 
 ## 4. Gaps reales (a corregir en el bridge antes de F1)
 
-| ID        | Gap                                                                                                                        | Severidad | Esfuerzo | Bloqueo F1 |
-| --------- | -------------------------------------------------------------------------------------------------------------------------- | --------- | -------- | ---------- |
-| BG-01     | Falta `scripts/ops/PRO_ENV_VARS.md` con inventario formal de env vars                                                      | Media     | 30min    | No         |
-| BG-02     | Tag semver formal en GitHub releases (`v0.6.0` cuando piloto OK)                                                           | Baja      | 5min     | No         |
-| BG-03     | Documentar explícitamente en CLAUDE.md que el bridge es categoría "edge tooling" del Shared Platform                       | Baja      | 15min    | No         |
-| BG-04     | WIF para auto-deploy CI/CD en F4 (aplica al pipeline, no al bridge como edge-tooling)                                      | Baja      | 1h       | No (F4)    |
-| ~~BG-05~~ | ~~Migración subdominio → `langfuse.atlax.ai`~~ — **CERRADO**: `atlax360.ai` es el dominio canónico (D-009 v0.3), no legacy | —         | —        | —          |
+| ID        | Gap                                                                                                                             | Severidad | Esfuerzo | Bloqueo F1 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------- | --------- | -------- | ---------- |
+| BG-01     | Falta `scripts/ops/PRO_ENV_VARS.md` con inventario formal de env vars                                                           | Media     | 30min    | No         |
+| BG-02     | Tag semver formal en GitHub releases (`v0.6.0` cuando piloto OK)                                                                | Baja      | 5min     | No         |
+| BG-03     | Documentar explícitamente en CLAUDE.md que el bridge es categoría "edge tooling" del Shared Platform                            | Baja      | 15min    | No         |
+| BG-04     | WIF para auto-deploy CI/CD en F4 (aplica al pipeline, no al bridge como edge-tooling)                                           | Baja      | 1h       | No (F4)    |
+| ~~BG-05~~ | ~~Migración subdominio fuera del dominio canónico~~ — **CERRADO**: `atlax360.ai` es el dominio canónico (D-009 v0.3), no legacy | —         | —        | —          |
 
 **Total bloqueo F1**: **0**. Los gaps son refinamiento, no precondición.
 
