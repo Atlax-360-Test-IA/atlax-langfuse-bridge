@@ -325,6 +325,13 @@ services:
     healthcheck:
       # The litellm:v1.83.7-stable image does NOT ship `curl` or `wget` —
       # use python3 (always present) for a portable healthcheck.
+      #
+      # start_period 120s: LiteLLM tarda ~90-120s en bootear (Prisma migrate
+      # deploy + post-migration sanity check + migration diff + db execute).
+      # Si subes a 30s el container queda en health: starting indefinidamente
+      # porque las primeras llamadas devuelven Connection refused antes de que
+      # el servicio escuche. Validado 2026-05-09: con 90s pasa a (healthy) en
+      # ~3 minutos tras recreate (margen ajustado); con 120s queda holgado.
       test:
         [
           "CMD",
@@ -335,7 +342,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 30s
+      start_period: 120s
 
 volumes:
   postgres-data:
