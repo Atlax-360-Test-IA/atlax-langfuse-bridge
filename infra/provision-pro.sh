@@ -216,19 +216,19 @@ if [[ "$SKIP_VPC" != "true" ]]; then
       --network=vpc-langfuse
   fi
 
-  log "Cloud NAT for outbound (Anthropic API, Slack alerts)..."
-  if ! exists "gcloud compute routers describe rt-langfuse --region=$GCP_REGION --project=$GCP_PROJECT_ID"; then
-    run gcloud compute routers create rt-langfuse \
-      --project="$GCP_PROJECT_ID" \
-      --network=vpc-langfuse \
-      --region="$GCP_REGION"
-    run gcloud compute routers nats create nat-langfuse \
-      --project="$GCP_PROJECT_ID" \
-      --router=rt-langfuse \
-      --region="$GCP_REGION" \
-      --auto-allocate-nat-external-ips \
-      --nat-all-subnet-ip-ranges
-  fi
+  # Cloud NAT POSTPONED (2026-05-09 decisión usuario):
+  #   - Sólo necesario para egress a Anthropic API desde el worker (vía
+  #     LiteLLM). Si LiteLLM no está activo, no hay tráfico saliente real
+  #     desde Cloud Run hacia internet.
+  #   - vpc-access-egress=private-ranges-only ya bloquea internet egress.
+  #   - Provisionar cuando se active el gateway LiteLLM (POST-V1 PV1-A3).
+  # Comando para activar:
+  #   gcloud compute routers create rt-langfuse --project=$GCP_PROJECT_ID \
+  #     --network=vpc-langfuse --region=$GCP_REGION
+  #   gcloud compute routers nats create nat-langfuse --project=$GCP_PROJECT_ID \
+  #     --router=rt-langfuse --region=$GCP_REGION \
+  #     --auto-allocate-nat-external-ips --nat-all-subnet-ip-ranges
+  log "Cloud NAT: SKIPPED (postponed hasta activación LiteLLM gateway)"
 
   log "Firewall rules..."
   if ! exists "gcloud compute firewall-rules describe fw-allow-run-to-data --project=$GCP_PROJECT_ID"; then
@@ -275,19 +275,27 @@ if [[ "$SKIP_SQL" != "true" ]]; then
   log "Cloud SQL Postgres..."
   if ! exists "gcloud sql instances describe langfuse-pg --project=$GCP_PROJECT_ID"; then
     SQL_ROOT_PASS=$(openssl rand -base64 32 | tr -d '\n')
+    # Minimum viable sizing (2026-05-09 decisión usuario):
+    #   - tier db-custom-1-3840: 1 vCPU + 3.75 GB RAM. Mínimo SLA-protected.
+    #     Postgres real usa 63 MB con 90 traces. Headroom 60x.
+    #     Upgrade incremental sin downtime cuando crezcamos.
+    #   - storage 10 GB SSD + auto-grow. Plan original tenía 50 GB.
+    #   - retained-backups-count 7: mitad del plan original (14d) — ahorra
+    #     coste de transaction log archive.
     run gcloud sql instances create langfuse-pg \
       --project="$GCP_PROJECT_ID" \
       --database-version=POSTGRES_16 \
       --region="$GCP_REGION" \
-      --tier=db-custom-2-7680 \
+      --tier=db-custom-1-3840 \
       --storage-type=SSD \
-      --storage-size=50 \
+      --storage-size=10 \
+      --storage-auto-increase \
       --network="projects/$GCP_PROJECT_ID/global/networks/vpc-langfuse" \
       --no-assign-ip \
       --backup \
       --backup-start-time=02:00 \
       --enable-point-in-time-recovery \
-      --retained-backups-count=14 \
+      --retained-backups-count=7 \
       --retained-transaction-log-days=7 \
       --availability-type=ZONAL \
       --root-password="$SQL_ROOT_PASS"
@@ -307,7 +315,10 @@ if [[ "$SKIP_SQL" != "true" ]]; then
       --password="$SQL_USER_PASS"
     log "Creating secret langfuse-database-url..."
     SQL_HOST=$(gcloud sql instances describe langfuse-pg --project="$GCP_PROJECT_ID" --format='value(ipAddresses[0].ipAddress)' || echo "10.20.100.3")
-    DB_URL="postgresql://langfuse:${SQL_USER_PASS}@${SQL_HOST}:5432/langfuse?sslmode=require"
+    # connection_limit=10 evita pool exhaustion en db-custom-1-3840
+    # (~25 conexiones max). Cloud Run web (concurrency=80) + worker
+    # (concurrency=1, minScale=1) requieren pool conservador.
+    DB_URL="postgresql://langfuse:${SQL_USER_PASS}@${SQL_HOST}:5432/langfuse?sslmode=require&connection_limit=10"
     if ! exists "gcloud secrets describe langfuse-database-url --project=$GCP_PROJECT_ID"; then
       printf '%s' "$DB_URL" | run gcloud secrets create langfuse-database-url \
         --project="$GCP_PROJECT_ID" \
@@ -322,10 +333,16 @@ fi
 
 if [[ "$SKIP_REDIS" != "true" ]]; then
   log "Memorystore Redis..."
+  # Minimum viable sizing (2026-05-09 decisión usuario):
+  #   - tier BASIC: sin HA replica. Redis real usa 11 MB con 90 traces.
+  #     Para PRO con 1-3 devs piloto, BASIC es suficiente. Si Redis falla,
+  #     I-2 (idempotencia) + reconciler reintentan los pocos jobs en cola
+  #     (segundos de pérdida). STANDARD_HA cuando piloto > 5 devs.
+  #   - size 1 GB: mínimo del tier. Redis real usa 11 MB.
   if ! exists "gcloud redis instances describe langfuse-redis --region=$GCP_REGION --project=$GCP_PROJECT_ID"; then
     run gcloud redis instances create langfuse-redis \
       --project="$GCP_PROJECT_ID" \
-      --tier=STANDARD_HA \
+      --tier=BASIC \
       --size=1 \
       --region="$GCP_REGION" \
       --network=vpc-langfuse \
@@ -390,24 +407,34 @@ if [[ "$SKIP_GCE" != "true" ]]; then
       --addresses=10.20.10.20
   fi
 
+  # Minimum viable sizing (2026-05-09 decisión usuario):
+  #   - data disk 50 GB pd-ssd (vs 200 GB plan original).
+  #     ClickHouse data real ~5-20 GB. Headroom 2-3x. Resize online.
   if ! exists "gcloud compute disks describe disk-clickhouse-data --zone=$GCP_ZONE --project=$GCP_PROJECT_ID"; then
     run gcloud compute disks create disk-clickhouse-data \
       --project="$GCP_PROJECT_ID" \
-      --size=200GB \
+      --size=50GB \
       --type=pd-ssd \
       --zone="$GCP_ZONE"
   fi
 
+  # Minimum viable sizing:
+  #   - machine-type e2-small: 2 shared vCPU + 2 GB RAM (vs n2-highmem-4
+  #     con 4 vCPU + 32 GB del plan original). ClickHouse real usa 551 MB.
+  #     Si vemos saturación CPU sostenida >80%, upgrade incremental:
+  #     gcloud compute instances set-machine-type clickhouse-vm \
+  #       --zone=$GCP_ZONE --machine-type=e2-medium  (sin reformat disk)
+  #   - boot-disk 20 GB (vs 50 GB). COS image ~5 GB + Docker overhead.
   if ! exists "gcloud compute instances describe clickhouse-vm --zone=$GCP_ZONE --project=$GCP_PROJECT_ID"; then
     run gcloud compute instances create clickhouse-vm \
       --project="$GCP_PROJECT_ID" \
       --zone="$GCP_ZONE" \
-      --machine-type=n2-highmem-4 \
+      --machine-type=e2-small \
       --network-interface="network=vpc-langfuse,subnet=subnet-data,private-network-ip=10.20.10.20,no-address" \
       --tags=langfuse-data \
       --image-family=cos-stable \
       --image-project=cos-cloud \
-      --boot-disk-size=50GB \
+      --boot-disk-size=20GB \
       --boot-disk-type=pd-balanced \
       --disk="name=disk-clickhouse-data,device-name=clickhouse-data,mode=rw,boot=no" \
       --metadata=enable-oslogin=TRUE \
@@ -419,13 +446,16 @@ if [[ "$SKIP_GCE" != "true" ]]; then
   fi
 
   log "Snapshot policy..."
+  # Minimum viable: retention 3 días (vs 7 plan original).
+  # Backup ClickHouse a GCS sigue siendo daily — los snapshots son
+  # recovery rápido de fallo de disco; 3 días suficientes en piloto.
   if ! exists "gcloud compute resource-policies describe sp-clickhouse-daily --region=$GCP_REGION --project=$GCP_PROJECT_ID"; then
     run gcloud compute resource-policies create snapshot-schedule sp-clickhouse-daily \
       --project="$GCP_PROJECT_ID" \
       --region="$GCP_REGION" \
       --start-time=02:30 \
       --daily-schedule \
-      --max-retention-days=7 \
+      --max-retention-days=3 \
       --on-source-disk-delete=keep-auto-snapshots
     run gcloud compute disks add-resource-policies disk-clickhouse-data \
       --project="$GCP_PROJECT_ID" \

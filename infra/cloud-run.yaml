@@ -75,9 +75,12 @@ spec:
             - name: http1
               containerPort: 3000
           resources:
+            # Minimum viable sizing (2026-05-09): langfuse-web real usa 651 MB
+            # con 90 traces. 1 GiB suficiente con margen 1.5x. Subir a 2 GiB
+            # si vemos OOM kills o Prisma client crece con migrations.
             limits:
-              cpu: "2"
-              memory: 2Gi
+              cpu: "1"
+              memory: 1Gi
           # Healthcheck — Langfuse expone /api/public/health
           # 150s tolerancia arranque (Prisma migrations + ClickHouse init + S3 connect)
           startupProbe:
@@ -241,9 +244,12 @@ spec:
             - name: http1
               containerPort: 3030
           resources:
+            # Minimum viable sizing (2026-05-09): langfuse-worker real usa
+            # 375 MB con 90 traces. 2 GiB suficiente con margen 5x. CPU 1
+            # vCPU sostenido cubre BullMQ poll loop + ingestion async.
             limits:
-              cpu: "2"
-              memory: 4Gi
+              cpu: "1"
+              memory: 2Gi
           startupProbe:
             httpGet:
               path: /api/health
