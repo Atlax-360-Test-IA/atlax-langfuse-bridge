@@ -48,6 +48,12 @@ describe("LiteLLM M1 smoke — gateway operativo", () => {
       console.log("[skip] SKIP_LITELLM_SMOKE=1");
       return;
     }
+    if (!gatewayReachable) {
+      console.log(
+        `[skip] LiteLLM gateway no accesible en ${LITELLM_HOST} — opt-in profile no levantado (esperado en CI sin stack)`,
+      );
+      return;
+    }
     const res = await fetch(`${LITELLM_HOST}/health/liveliness`, {
       signal: AbortSignal.timeout(5_000),
     });
