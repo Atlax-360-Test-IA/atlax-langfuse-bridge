@@ -61,10 +61,10 @@ Despliegue de la stack Langfuse v3 (web + worker) en Google Cloud Run en `europe
                            ▼
         ┌────────────────────────────────────────────────┐
         │ GCS:                                           │
-        │  • atlax-langfuse-events  (S3-compat HMAC)     │
-        │  • atlax-langfuse-media   (uploads UI)         │
-        │  • atlax-langfuse-clickhouse-backups           │
-        │  • atlax-langfuse-pg-exports                   │
+        │  • atlax360-ai-langfuse-events       (S3-compat HMAC) │
+        │  • atlax360-ai-langfuse-media        (uploads UI)     │
+        │  • atlax360-ai-langfuse-clickhouse-backups            │
+        │  • atlax360-ai-langfuse-pg-exports                    │
         │  Object Versioning ON · Lifecycle 30/90/365    │
         └────────────────────────────────────────────────┘
 
@@ -146,7 +146,8 @@ Antes de empezar la F1:
 **Variables de entorno** que se asumen exportadas durante la ejecución del plan:
 
 ```bash
-export GCP_PROJECT_ID="atlax-langfuse-prod"      # o como se llame el proyecto
+export GCP_PROJECT_ID="atlax360-ai-langfuse-pro"   # convención atlax360-ai-<purpose>-<env>
+export GCP_PROJECT_NAME="Atlax 360 · AI · Langfuse · PRO"  # display name
 export GCP_REGION="europe-west1"
 export GCP_ZONE="europe-west1-b"
 export DOMAIN="langfuse.atlax360.ai"
@@ -277,7 +278,7 @@ gcloud redis instances create langfuse-redis \
 
 ```bash
 for bucket in events media clickhouse-backups pg-exports; do
-  gcloud storage buckets create gs://atlax-langfuse-$bucket \
+  gcloud storage buckets create gs://atlax360-ai-langfuse-$bucket \
     --location=$GCP_REGION \
     --uniform-bucket-level-access \
     --public-access-prevention
@@ -298,12 +299,12 @@ cat > /tmp/lifecycle-events.json <<EOF
   }
 }
 EOF
-gcloud storage buckets update gs://atlax-langfuse-events \
+gcloud storage buckets update gs://atlax360-ai-langfuse-events \
   --versioning \
   --lifecycle-file=/tmp/lifecycle-events.json
 ```
 
-**Checkpoint**: `gcloud storage buckets list | grep atlax-langfuse` muestra los 4 buckets.
+**Checkpoint**: `gcloud storage buckets list | grep atlax360-ai-langfuse` muestra los 4 buckets.
 
 ### 4.5 GCE ClickHouse VM
 
@@ -391,11 +392,11 @@ done
 gcloud iam service-accounts create langfuse-gcs-hmac \
   --display-name="Langfuse GCS HMAC owner (no other perms)"
 
-gcloud storage buckets add-iam-policy-binding gs://atlax-langfuse-events \
+gcloud storage buckets add-iam-policy-binding gs://atlax360-ai-langfuse-events \
   --member="serviceAccount:langfuse-gcs-hmac@$GCP_PROJECT_ID.iam.gserviceaccount.com" \
   --role="roles/storage.objectAdmin"
 
-gcloud storage buckets add-iam-policy-binding gs://atlax-langfuse-media \
+gcloud storage buckets add-iam-policy-binding gs://atlax360-ai-langfuse-media \
   --member="serviceAccount:langfuse-gcs-hmac@$GCP_PROJECT_ID.iam.gserviceaccount.com" \
   --role="roles/storage.objectAdmin"
 
@@ -465,11 +466,11 @@ bash scripts/backup-langfuse.sh
 ```bash
 # Subir el dump a GCS para que Cloud SQL pueda importarlo
 gcloud storage cp ~/.atlax-ai/backups/$(date +%Y-%m-%d)/pg.dump \
-  gs://atlax-langfuse-pg-exports/migration-$(date +%Y%m%d).dump
+  gs://atlax360-ai-langfuse-pg-exports/migration-$(date +%Y%m%d).dump
 
 # Importar a Cloud SQL
 gcloud sql import sql langfuse-pg \
-  gs://atlax-langfuse-pg-exports/migration-$(date +%Y%m%d).dump \
+  gs://atlax360-ai-langfuse-pg-exports/migration-$(date +%Y%m%d).dump \
   --database=langfuse
 ```
 
@@ -481,7 +482,7 @@ gcloud sql import sql langfuse-pg \
 -- En la instancia local
 BACKUP DATABASE default
 TO S3(
-  'https://storage.googleapis.com/atlax-langfuse-clickhouse-backups/migration-2026-05-08/',
+  'https://storage.googleapis.com/atlax360-ai-langfuse-clickhouse-backups/migration-2026-05-08/',
   '${HMAC_ID}',
   '${HMAC_SECRET}'
 )
@@ -490,7 +491,7 @@ SETTINGS support_batch_delete = false;
 -- En la VM ClickHouse PRO (vía clickhouse-client desde otra VM IAP'd)
 RESTORE DATABASE default
 FROM S3(
-  'https://storage.googleapis.com/atlax-langfuse-clickhouse-backups/migration-2026-05-08/',
+  'https://storage.googleapis.com/atlax360-ai-langfuse-clickhouse-backups/migration-2026-05-08/',
   '${HMAC_ID}',
   '${HMAC_SECRET}'
 )
@@ -783,7 +784,7 @@ gcloud run jobs create atlax-clickhouse-backup \
   --service-account=langfuse-jobs@$GCP_PROJECT_ID.iam.gserviceaccount.com \
   --set-secrets="CLICKHOUSE_HOST=langfuse-clickhouse-url:latest,CLICKHOUSE_PASSWORD=langfuse-clickhouse-password:latest,HMAC_ID=langfuse-gcs-hmac-id:latest,HMAC_SECRET=langfuse-gcs-hmac-secret:latest" \
   --command=/bin/bash \
-  --args="-c,curl -u default:\$CLICKHOUSE_PASSWORD -X POST \"\$CLICKHOUSE_HOST/?query=BACKUP+DATABASE+default+TO+S3('https://storage.googleapis.com/atlax-langfuse-clickhouse-backups/\$(date +%%Y-%%m-%%d)/','\$HMAC_ID','\$HMAC_SECRET')+SETTINGS+support_batch_delete%%3Dfalse\"" \
+  --args="-c,curl -u default:\$CLICKHOUSE_PASSWORD -X POST \"\$CLICKHOUSE_HOST/?query=BACKUP+DATABASE+default+TO+S3('https://storage.googleapis.com/atlax360-ai-langfuse-clickhouse-backups/\$(date +%%Y-%%m-%%d)/','\$HMAC_ID','\$HMAC_SECRET')+SETTINGS+support_batch_delete%%3Dfalse\"" \
   --vpc-egress=private-ranges-only \
   --network=vpc-langfuse \
   --subnet=subnet-jobs

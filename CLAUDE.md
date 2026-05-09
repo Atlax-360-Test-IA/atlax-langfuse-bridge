@@ -23,6 +23,55 @@ piezas coordinadas:
    cada 15 min vía systemd/launchd, detecta drift y re-ejecuta el hook.
 3. **Stack Langfuse v3 self-hosted** (`docker/`) — destino de todas las trazas.
 
+## Categoría Shared Platform — `edge-tooling` + `server-only`
+
+Este proyecto pertenece a dos categorías del patrón Atlax 360 AI Suite Shared
+Platform (ver `~/work/kairos/docs/atlax-ai-shared-platform.md` v0.3 §3.1):
+
+- **`edge-tooling`**: hook + reconciler + scripts viven en la laptop del dev,
+  sin servidor HTTP permanente. Invariantes que NO aplican: `getAuthContext`,
+  CORS, CSP, `/api/health`, OAuth Google, Workload Identity Federation. Sí
+  aplican: logs JSON estructurados, `AbortSignal.timeout()`, retry+backoff. Ver
+  invariante I-13 (edge/core split). Esta parte NUNCA migra a Cloud Run.
+- **`server-only`**: el stack Langfuse v3 (web + worker + Postgres + ClickHouse +
+  Redis + GCS) es el componente que sí va a Cloud Run + GCE en GCP. Este sí
+  consume la Capa 1 del Shared Platform (proyecto GCP propio, secretos en
+  Secret Manager, logs a Cloud Logging).
+
+Validación completa: [`docs/audits/shared-platform-validation-2026-05-09.md`](./docs/audits/shared-platform-validation-2026-05-09.md).
+
+## Convención de naming GCP
+
+Todos los proyectos GCP de Atlax 360 AI Suite siguen el patrón:
+
+```
+atlax360-ai-<purpose>-<env>
+```
+
+Donde `<purpose>` es el producto y `<env>` ∈ {`dev`, `pre`, `pro`}. Display
+name canónico: `Atlax 360 · AI · <Purpose> · <ENV>` (con `·` como separador).
+
+Pre-reservado para la suite:
+
+| Project ID                            | Display name                       | Categoría     |
+| ------------------------------------- | ---------------------------------- | ------------- |
+| `atlax360-ai-platform-{dev,pre,pro}`  | Atlax 360 · AI · Platform · {ENV}  | Capa 1 shared |
+| `atlax360-ai-langfuse-pro`            | Atlax 360 · AI · Langfuse · PRO    | server-only   |
+| `atlax360-ai-kairos-{dev,pre,pro}`    | Atlax 360 · AI · Kairos · {ENV}    | web-app       |
+| `atlax360-ai-dashboard-{dev,pre,pro}` | Atlax 360 · AI · Dashboard · {ENV} | web-app       |
+| `atlax360-ai-harvest-{dev,pre,pro}`   | Atlax 360 · AI · Harvest · {ENV}   | híbrido       |
+
+**Por qué este naming**: separa narrativamente la subfamilia AI Suite del
+resto del portafolio Atlax 360, manteniendo coherencia con el dominio canónico
+`atlax360.ai` (D-009 v0.3). GCP IDs no admiten `.`, por eso el dominio
+literal no se replica en el ID; el display name aporta el `·` visual.
+
+Buckets GCS y otros recursos siguen `atlax360-ai-<purpose>-<resource>` (ej.
+`atlax360-ai-langfuse-events`, `atlax360-ai-langfuse-clickhouse-backups`).
+
+Decisión formal: pendiente ADR en `atlax-platform` (sesión arranque del repo
+shared) — hasta entonces este CLAUDE.md es la fuente de verdad.
+
 ## Invariantes no negociables
 
 > Estos invariantes son las reglas de comportamiento que Claude Code debe
