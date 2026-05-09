@@ -13,7 +13,7 @@ Despliegue de la stack Langfuse v3 (web + worker) en Google Cloud Run en `europe
 
 **No migran a Cloud Run** (invariante I-13): `hooks/langfuse-sync.ts`, `scripts/reconcile-traces.ts`, `scripts/detect-tier.ts`, `setup/`, `browser-extension/`. Estos componentes se quedan en cada laptop dev.
 
-**Coste mensual estimado total**: ~$420-510/mes (con CUD 1 año en GCE ClickHouse, `minScale=0` en web).
+**Coste mensual estimado total**: **~$145-180/mes en F1 minimum viable** (decisión 2026-05-09: e2-small ClickHouse, db-custom-1-3840 SQL, Redis BASIC, Cloud LB + NAT postpuestos). Target ~$480-540/mes cuando se promueva a sizing completo (38 devs).
 
 **Downtime real durante migración**: ~15-30 minutos en F2 (export+import de ClickHouse + Postgres dump).
 
@@ -85,21 +85,45 @@ Despliegue de la stack Langfuse v3 (web + worker) en Google Cloud Run en `europe
 
 ## 2. Coste mensual estimado (referencia, sin compromiso)
 
-| Recurso                         | Configuración                                   | $/mes estimado    |
-| ------------------------------- | ----------------------------------------------- | ----------------- |
-| **GCE ClickHouse VM**           | n2-highmem-4, 200 GB pd-ssd, CUD 1 año          | $180              |
-| **Cloud SQL Postgres**          | db-custom-2-7680, zonal HA, 50 GB SSD, PITR 14d | $130              |
-| **Memorystore Redis**           | Standard 1 GB, HA replica, AUTH+TLS             | $50               |
-| **Cloud Run langfuse-web**      | minScale=0, 2 vCPU, 2 GiB, ~30k req/mes         | $20-30            |
-| **Cloud Run langfuse-worker**   | minScale=1, cpu-throttling=false, 2 vCPU, 4 GiB | $60-80            |
-| **Cloud Run Jobs** (cron)       | 5 min/día execution                             | $1-3              |
-| **GCS** (4 buckets)             | ~50 GB cumulative, mostly Coldline              | $5-10             |
-| **GCS snapshots ClickHouse**    | 200 GB pd-ssd, 7 snapshots incremental          | $5                |
-| **Cloud Load Balancer + Armor** | 1 forwarding rule HTTPS + 10M req/mes           | $25-30            |
-| **Secret Manager**              | 14 secrets, ~1k accesses/día                    | $1                |
-| **Cloud Logging/Monitoring**    | <50 GB/mes                                      | $0 (free)         |
-| **Cloud NAT**                   | 1 gateway, ~10 GB egress/mes (Anthropic API)    | $5-10             |
-| **Total estimado**              |                                                 | **~$480-540/mes** |
+### 2.1 F1 Minimum viable (decisión 2026-05-09)
+
+Sizing ajustado al uso real observado del docker-compose actual (90 traces, 22h up):
+
+| Recurso                       | Configuración                                                    | $/mes estimado    |
+| ----------------------------- | ---------------------------------------------------------------- | ----------------- |
+| **GCE ClickHouse VM**         | e2-small (2 shared vCPU, 2 GB), 50 GB pd-ssd, 20 GB boot         | $30               |
+| **Cloud SQL Postgres**        | db-custom-1-3840 (1 vCPU, 3.75 GB), 10 GB SSD auto-grow, PITR 7d | $50               |
+| **Memorystore Redis**         | BASIC 1 GB (sin HA), AUTH+TLS                                    | $25               |
+| **Cloud Run langfuse-web**    | minScale=0, 1 vCPU, 1 GiB, ~30k req/mes                          | $5-15             |
+| **Cloud Run langfuse-worker** | minScale=1, cpu-throttling=false, 1 vCPU, 2 GiB                  | $30-50            |
+| **GCS** (4 buckets)           | ~50 GB cumulative, mostly Coldline                               | $2-5              |
+| **GCS snapshots ClickHouse**  | 50 GB pd-ssd, 3 snapshots incremental                            | $2                |
+| **Secret Manager**            | 11 secrets, ~1k accesses/día                                     | $1                |
+| **Cloud Logging/Monitoring**  | <50 GB/mes                                                       | $0 (free)         |
+| **Total F1 minimum viable**   |                                                                  | **~$145-180/mes** |
+
+**POSTPONED (provisionar cuando aplique):**
+
+| Recurso                                          | Configuración                         | Cuándo                                      |
+| ------------------------------------------------ | ------------------------------------- | ------------------------------------------- |
+| Cloud Load Balancer + Cloud Armor + cert managed | 1 forwarding rule HTTPS + 10M req/mes | F4 (cuando hay ≥3 devs onboardados)         |
+| Cloud NAT                                        | 1 gateway, ~10 GB egress/mes          | Activación LiteLLM gateway (POST-V1 PV1-A3) |
+| Cloud Run Jobs (cron)                            | 5 min/día execution                   | Tras F1 (backups + drills)                  |
+
+### 2.2 Target post-piloto (sizing completo)
+
+Cuando piloto exitoso ≥3 devs × 2 semanas → upgrade incremental sin downtime:
+
+| Recurso                   | Upgrade target                                | $/mes target      |
+| ------------------------- | --------------------------------------------- | ----------------- |
+| GCE ClickHouse VM         | e2-medium (4 GB) → e2-standard-2 (8 GB)       | $50-80            |
+| Cloud SQL Postgres        | db-custom-2-7680 (2 vCPU, 7.5 GB) regional HA | $130              |
+| Memorystore Redis         | STANDARD_HA 1 GB                              | $50               |
+| Cloud Run langfuse-web    | 2 vCPU, 2 GiB                                 | $20-30            |
+| Cloud Run langfuse-worker | 2 vCPU, 4 GiB                                 | $60-80            |
+| Cloud LB + Cloud Armor    | activado en F4                                | $25-30            |
+| Cloud NAT                 | activado al activar LiteLLM                   | $5-10             |
+| **Total target completo** |                                               | **~$480-540/mes** |
 
 > ⚠️ **No son precios oficiales**. Verificar con la calculadora oficial de GCP (`cloud.google.com/products/calculator/`) para `europe-west1` antes de comprometer presupuesto.
 
