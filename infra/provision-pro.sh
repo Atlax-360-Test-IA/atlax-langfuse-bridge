@@ -294,6 +294,10 @@ if [[ "$SKIP_SQL" != "true" ]]; then
   if ! exists "gcloud sql instances describe langfuse-pg --project=$GCP_PROJECT_ID"; then
     SQL_ROOT_PASS=$(openssl rand -base64 32 | tr -d '\n')
     # Minimum viable sizing (2026-05-09 decisión usuario):
+    #   - edition ENTERPRISE: explícito porque GCP defaults nuevos proyectos
+    #     a ENTERPRISE_PLUS, que NO admite custom tiers (solo db-perf-optimized-N-*
+    #     desde ~$200/mes). ENTERPRISE permite db-custom-* y mantiene F1 budget.
+    #     Detectado 2026-05-09 al fallar create con default ENTERPRISE_PLUS.
     #   - tier db-custom-1-3840: 1 vCPU + 3.75 GB RAM. Mínimo SLA-protected.
     #     Postgres real usa 63 MB con 90 traces. Headroom 60x.
     #     Upgrade incremental sin downtime cuando crezcamos.
@@ -303,6 +307,7 @@ if [[ "$SKIP_SQL" != "true" ]]; then
     run gcloud sql instances create langfuse-pg \
       --project="$GCP_PROJECT_ID" \
       --database-version=POSTGRES_16 \
+      --edition=ENTERPRISE \
       --region="$GCP_REGION" \
       --tier=db-custom-1-3840 \
       --storage-type=SSD \
