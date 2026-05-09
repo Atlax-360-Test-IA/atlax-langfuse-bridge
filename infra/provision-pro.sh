@@ -15,17 +15,28 @@
 #     vpcaccess, servicenetworking, storage, certificatemanager)
 #   - Variables de entorno: GCP_PROJECT_ID, GCP_REGION, GCP_ZONE, DOMAIN
 #
+# Convención de naming GCP (ver CLAUDE.md "Convención de naming GCP"):
+#   atlax360-ai-<purpose>-<env>   — proyectos AI Suite (D-009 / Shared Platform v0.3)
+#
 # Uso:
-#   export GCP_PROJECT_ID=atlax-langfuse-prod
+#   export GCP_PROJECT_ID=atlax360-ai-langfuse-pro
+#   export GCP_PROJECT_NAME="Atlax 360 · AI · Langfuse · PRO"  # display name (opcional)
 #   export GCP_REGION=europe-west1
 #   export GCP_ZONE=europe-west1-b
 #   export DOMAIN=langfuse.atlax360.ai
 #   export GCP_BILLING_ACCOUNT=01596F-DD220B-DCE2D3   # Atlax360 - Devoteam
-#   export GCP_FOLDER_ID=59888934980                  # folder atlax-ai (opcional)
+#   export GCP_FOLDER_ID=59888934980                  # folder AI Suite (opcional)
 #   bash infra/provision-pro.sh --dry-run     # preview
 #   bash infra/provision-pro.sh                # ejecuta
 #   bash infra/provision-pro.sh --skip-vpc     # saltarse pasos ya hechos
 #   bash infra/provision-pro.sh --create-project   # crear el proyecto si no existe
+#
+# Validación previa (OBLIGATORIA antes de ejecutar sin --dry-run):
+#   1. docs/audits/shared-platform-validation-2026-05-09.md           — audit Shared Platform v0.3
+#   2. scripts/ops/PRO_ENV_VARS.md                                    — inventario formal env vars
+#   3. CLAUDE.md "Convención de naming GCP"                           — naming canónico
+#   4. bun run check                                                  — 818/0 fail tests
+#   5. bun test tests/cloud-run-boundary.test.ts                      — verificar I-13 (edge/core)
 
 set -euo pipefail
 
@@ -106,14 +117,15 @@ if [[ "$CREATE_PROJECT" == "true" ]]; then
   if exists "gcloud projects describe $GCP_PROJECT_ID"; then
     log "Project $GCP_PROJECT_ID already exists, skipping creation"
   else
-    log "Creating project $GCP_PROJECT_ID..."
+    project_display_name="${GCP_PROJECT_NAME:-$GCP_PROJECT_ID}"
+    log "Creating project $GCP_PROJECT_ID (display: $project_display_name)..."
     if [[ -n "${GCP_FOLDER_ID:-}" ]]; then
       run gcloud projects create "$GCP_PROJECT_ID" \
-        --name="$GCP_PROJECT_ID" \
+        --name="$project_display_name" \
         --folder="$GCP_FOLDER_ID"
     else
       run gcloud projects create "$GCP_PROJECT_ID" \
-        --name="$GCP_PROJECT_ID"
+        --name="$project_display_name"
     fi
 
     if [[ -n "${GCP_BILLING_ACCOUNT:-}" ]]; then
@@ -358,7 +370,7 @@ fi
 if [[ "$SKIP_GCS" != "true" ]]; then
   log "GCS buckets..."
   for bucket in events media clickhouse-backups pg-exports; do
-    full="atlax-langfuse-$bucket"
+    full="atlax360-ai-langfuse-$bucket"
     if ! exists "gcloud storage buckets describe gs://$full --project=$GCP_PROJECT_ID"; then
       run gcloud storage buckets create "gs://$full" \
         --project="$GCP_PROJECT_ID" \
@@ -384,7 +396,7 @@ if [[ "$SKIP_GCS" != "true" ]]; then
   }
 }
 EOF
-  run gcloud storage buckets update gs://atlax-langfuse-events \
+  run gcloud storage buckets update gs://atlax360-ai-langfuse-events \
     --project="$GCP_PROJECT_ID" \
     --lifecycle-file=/tmp/lifecycle-events.json
 fi
@@ -509,22 +521,22 @@ if [[ "$SKIP_IAM" != "true" ]]; then
   done
 
   log "Bucket-scoped permissions..."
-  run gcloud storage buckets add-iam-policy-binding gs://atlax-langfuse-events \
+  run gcloud storage buckets add-iam-policy-binding gs://atlax360-ai-langfuse-events \
     --project="$GCP_PROJECT_ID" \
     --member="serviceAccount:langfuse-gcs-hmac@$GCP_PROJECT_ID.iam.gserviceaccount.com" \
     --role="roles/storage.objectAdmin"
 
-  run gcloud storage buckets add-iam-policy-binding gs://atlax-langfuse-media \
+  run gcloud storage buckets add-iam-policy-binding gs://atlax360-ai-langfuse-media \
     --project="$GCP_PROJECT_ID" \
     --member="serviceAccount:langfuse-gcs-hmac@$GCP_PROJECT_ID.iam.gserviceaccount.com" \
     --role="roles/storage.objectAdmin"
 
-  run gcloud storage buckets add-iam-policy-binding gs://atlax-langfuse-clickhouse-backups \
+  run gcloud storage buckets add-iam-policy-binding gs://atlax360-ai-langfuse-clickhouse-backups \
     --project="$GCP_PROJECT_ID" \
     --member="serviceAccount:langfuse-jobs@$GCP_PROJECT_ID.iam.gserviceaccount.com" \
     --role="roles/storage.objectAdmin"
 
-  run gcloud storage buckets add-iam-policy-binding gs://atlax-langfuse-pg-exports \
+  run gcloud storage buckets add-iam-policy-binding gs://atlax360-ai-langfuse-pg-exports \
     --project="$GCP_PROJECT_ID" \
     --member="serviceAccount:langfuse-jobs@$GCP_PROJECT_ID.iam.gserviceaccount.com" \
     --role="roles/storage.objectAdmin"
@@ -620,6 +632,6 @@ log "  Subnets:     subnet-run-egress, subnet-data, subnet-jobs"
 log "  Postgres:    langfuse-pg ($GCP_REGION)"
 log "  Redis:       langfuse-redis ($GCP_REGION)"
 log "  ClickHouse:  clickhouse-vm en $GCP_ZONE (IP 10.20.10.20)"
-log "  GCS:         atlax-langfuse-{events,media,clickhouse-backups,pg-exports}"
+log "  GCS:         atlax360-ai-langfuse-{events,media,clickhouse-backups,pg-exports}"
 log "  SAs:         langfuse-{web,worker,jobs,scheduler,gcs-hmac}, clickhouse-vm"
 log "  Secrets:     langfuse-{database-url,clickhouse-*,redis-*,gcs-hmac-*,nextauth-secret,salt,encryption-key,init-admin-password}"

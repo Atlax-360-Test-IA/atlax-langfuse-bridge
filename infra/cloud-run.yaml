@@ -8,7 +8,7 @@
 #   - Plan formal: docs/operations/cloud-run-deployment-plan.md
 #
 # Variables que envsubst reemplaza al render (ver provision-pro.sh):
-#   $GCP_PROJECT_ID         — id del proyecto GCP (ej. atlax-langfuse-prod)
+#   $GCP_PROJECT_ID         — id del proyecto GCP (ej. atlax360-ai-langfuse-pro)
 #   $LANGFUSE_VERSION       — versión de la imagen langfuse (ej. 3.172.1)
 #
 # To deploy:
@@ -142,9 +142,9 @@ spec:
               value: "false"
             - name: CLICKHOUSE_MIGRATION_SSL
               value: "false"
-            # ── S3 events bucket (atlax-langfuse-events vía GCS HMAC) ──
+            # ── S3 events bucket (atlax360-ai-langfuse-events vía GCS HMAC) ──
             - name: LANGFUSE_S3_EVENT_UPLOAD_BUCKET
-              value: atlax-langfuse-events
+              value: atlax360-ai-langfuse-events
             - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
               value: europe-west1
             - name: LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT
@@ -164,7 +164,7 @@ spec:
             # ── S3 media bucket (uploads UI: avatares, exports manuales) ──
             # Faltaba en el manifest pre-auditoría — añadido cambio #5
             - name: LANGFUSE_S3_MEDIA_UPLOAD_BUCKET
-              value: atlax-langfuse-media
+              value: atlax360-ai-langfuse-media
             - name: LANGFUSE_S3_MEDIA_UPLOAD_REGION
               value: europe-west1
             - name: LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT
@@ -305,7 +305,7 @@ spec:
             - name: CLICKHOUSE_MIGRATION_SSL
               value: "false"
             - name: LANGFUSE_S3_EVENT_UPLOAD_BUCKET
-              value: atlax-langfuse-events
+              value: atlax360-ai-langfuse-events
             - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
               value: europe-west1
             - name: LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT
@@ -323,7 +323,7 @@ spec:
                   name: langfuse-gcs-hmac-secret
                   key: latest
             - name: LANGFUSE_S3_MEDIA_UPLOAD_BUCKET
-              value: atlax-langfuse-media
+              value: atlax360-ai-langfuse-media
             - name: LANGFUSE_S3_MEDIA_UPLOAD_REGION
               value: europe-west1
             - name: LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT
