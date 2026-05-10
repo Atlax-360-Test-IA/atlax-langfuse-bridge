@@ -499,16 +499,18 @@ if [[ "$SKIP_GCE" != "true" ]]; then
   fi
 
   log "Snapshot policy..."
-  # Minimum viable: retention 3 días (vs 7 plan original).
-  # Backup ClickHouse a GCS sigue siendo daily — los snapshots son
-  # recovery rápido de fallo de disco; 3 días suficientes en piloto.
+  # Retention 7 días: cubre detección de corrupción en lunes ocurrida en viernes.
+  # Antes era 3d (minimum-viable F1) — subido a 7d el 2026-05-10 al activar 14
+  # devs en PRO. Para cambiar retention en GCP hay que delete+recreate (gcloud
+  # resource-policies update no permite modificar maxRetentionDays).
+  # Los snapshots existentes se preservan con on-source-disk-delete=keep-auto-snapshots.
   if ! exists "gcloud compute resource-policies describe sp-clickhouse-daily --region=$GCP_REGION --project=$GCP_PROJECT_ID"; then
     run gcloud compute resource-policies create snapshot-schedule sp-clickhouse-daily \
       --project="$GCP_PROJECT_ID" \
       --region="$GCP_REGION" \
       --start-time=02:30 \
       --daily-schedule \
-      --max-retention-days=3 \
+      --max-retention-days=7 \
       --on-source-disk-delete=keep-auto-snapshots
     run gcloud compute disks add-resource-policies disk-clickhouse-data \
       --project="$GCP_PROJECT_ID" \

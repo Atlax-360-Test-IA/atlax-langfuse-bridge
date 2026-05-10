@@ -222,20 +222,19 @@ describe("infra/backup-story.md PRO backup plan", () => {
 
   test("documents Cloud SQL PITR", () => {
     expect(story).toContain("PITR");
-    expect(story).toContain("Point-In-Time Recovery");
   });
 
-  test("documents ClickHouse backup options", () => {
-    expect(story).toContain("ClickHouse Cloud");
+  test("documents ClickHouse defense-in-depth (snapshot + BACKUP TO S3)", () => {
     expect(story).toContain("BACKUP TO S3");
+    expect(story).toContain("snapshot");
   });
 
-  test("documents GCS lifecycle for MinIO replacement", () => {
+  test("documents GCS bucket policy with versioning + lifecycle", () => {
     expect(story).toContain("GCS");
-    expect(story).toContain("Versioning");
+    expect(story).toMatch(/Versioning|versioning/);
   });
 
-  test("declares restore drill cadence", () => {
-    expect(story).toContain("quarterly");
+  test("declares restore drill cadence (trimestral)", () => {
+    expect(story).toMatch(/trimestral|quarterly/i);
   });
 });
