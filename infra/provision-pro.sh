@@ -234,19 +234,49 @@ if [[ "$SKIP_VPC" != "true" ]]; then
       --network=vpc-langfuse
   fi
 
-  # Cloud NAT POSTPONED (2026-05-09 decisión usuario):
-  #   - Sólo necesario para egress a Anthropic API desde el worker (vía
-  #     LiteLLM). Si LiteLLM no está activo, no hay tráfico saliente real
-  #     desde Cloud Run hacia internet.
-  #   - vpc-access-egress=private-ranges-only ya bloquea internet egress.
-  #   - Provisionar cuando se active el gateway LiteLLM (POST-V1 PV1-A3).
-  # Comando para activar:
-  #   gcloud compute routers create rt-langfuse --project=$GCP_PROJECT_ID \
-  #     --network=vpc-langfuse --region=$GCP_REGION
-  #   gcloud compute routers nats create nat-langfuse --project=$GCP_PROJECT_ID \
-  #     --router=rt-langfuse --region=$GCP_REGION \
-  #     --auto-allocate-nat-external-ips --nat-all-subnet-ip-ranges
-  log "Cloud NAT: SKIPPED (postponed hasta activación LiteLLM gateway)"
+  # Cloud NAT (2026-05-09 activado durante F1 PRO real):
+  #   - Originalmente postponed hasta LiteLLM gateway, pero el infra readiness
+  #     check post-F1 detectó que ClickHouse VM no podía pull docker images
+  #     desde Docker Hub (registry-1.docker.io BLOCKED) sin NAT.
+  #   - NAT limitado a subnet-data (donde vive clickhouse-vm) — Cloud Run web/worker
+  #     usa private-ranges-only egress, no necesita NAT.
+  #   - Coste: ~$32/mes (gateway + ~$0.045/GB procesado).
+  log "Cloud NAT (router + gateway, NAT solo de subnet-data)..."
+  if ! exists "gcloud compute routers describe router-langfuse-nat --project=$GCP_PROJECT_ID --region=$GCP_REGION"; then
+    run gcloud compute routers create router-langfuse-nat \
+      --project="$GCP_PROJECT_ID" \
+      --network=vpc-langfuse \
+      --region="$GCP_REGION" \
+      --description="Cloud Router para NAT egress (clickhouse-vm Docker Hub)"
+  fi
+  if ! exists "gcloud compute routers nats describe nat-langfuse --router=router-langfuse-nat --project=$GCP_PROJECT_ID --region=$GCP_REGION"; then
+    run gcloud compute routers nats create nat-langfuse \
+      --project="$GCP_PROJECT_ID" \
+      --router=router-langfuse-nat \
+      --region="$GCP_REGION" \
+      --nat-custom-subnet-ip-ranges=subnet-data \
+      --auto-allocate-nat-external-ips \
+      --enable-logging \
+      --log-filter=ERRORS_ONLY
+  fi
+
+  # Hardening: GCP crea automáticamente la red `default` (auto-mode VPC) con
+  # 4 firewall rules `default-allow-{ssh,rdp,icmp,internal}` que permiten SSH/RDP/ICMP
+  # desde 0.0.0.0/0. Aunque ningún recurso nuestro la usa, queda como vector de
+  # exposición si alguien (humano o script) lanza una VM sin --network=vpc-langfuse.
+  # Borrar default network reduce blast radius. Detectado durante infra readiness
+  # check post-F1 PRO 2026-05-09. Si la default no existe, skip silencioso.
+  log "Hardening: borrar red default (auto-creada por GCP)..."
+  if exists "gcloud compute networks describe default --project=$GCP_PROJECT_ID"; then
+    for rule in default-allow-icmp default-allow-internal default-allow-rdp default-allow-ssh; do
+      if exists "gcloud compute firewall-rules describe $rule --project=$GCP_PROJECT_ID"; then
+        run gcloud compute firewall-rules delete "$rule" --project="$GCP_PROJECT_ID" --quiet
+      fi
+    done
+    run gcloud compute networks delete default --project="$GCP_PROJECT_ID" --quiet
+  else
+    log "  Red default ya no existe — skip"
+  fi
 
   log "Firewall rules..."
   if ! exists "gcloud compute firewall-rules describe fw-allow-run-to-data --project=$GCP_PROJECT_ID"; then
@@ -642,8 +672,9 @@ log "  5. Custom domain (Fase 4): ver §7 del plan"
 log "  6. Cutover (Fase 5): ver §8 del plan"
 log ""
 log "Recursos creados:"
-log "  VPC:         vpc-langfuse"
+log "  VPC:         vpc-langfuse (red default eliminada)"
 log "  Subnets:     subnet-run-egress, subnet-data, subnet-jobs"
+log "  Cloud NAT:   nat-langfuse en router-langfuse-nat (NAT solo de subnet-data)"
 log "  Postgres:    langfuse-pg ($GCP_REGION)"
 log "  Redis:       langfuse-redis ($GCP_REGION)"
 log "  ClickHouse:  clickhouse-vm en $GCP_ZONE (IP 10.20.10.20)"
