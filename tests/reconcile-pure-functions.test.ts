@@ -14,6 +14,8 @@ import {
   computeReportRange,
   isSeatOnlyScenario,
   compareCostByModel,
+  isPartialCoverageScenario,
+  COST_PARTIAL_COVERAGE_RATIO,
 } from "../scripts/reconcile-traces";
 
 // ─── familyKey ──────────────────────────────────────────────────────────────
@@ -249,5 +251,67 @@ describe("compareCostByModel", () => {
   test("returns empty when input maps are empty", () => {
     const rows = compareCostByModel(new Map(), new Map(), 0.05, 0.01);
     expect(rows).toEqual([]);
+  });
+});
+
+// ─── isPartialCoverageScenario (Issue #77) ──────────────────────────────────
+
+describe("isPartialCoverageScenario", () => {
+  test("COST_PARTIAL_COVERAGE_RATIO default is 3 (exported constant)", () => {
+    // Guards against accidental change to the default ratio.
+    expect(COST_PARTIAL_COVERAGE_RATIO).toBe(3);
+  });
+
+  test("returns false for empty rows", () => {
+    expect(isPartialCoverageScenario([])).toBe(false);
+  });
+
+  test("returns false when real <= estimated × ratio (coverage looks full)", () => {
+    // est=100, real=200 → real/est = 2× < 3× → not partial coverage
+    const rows = [{ estimatedUSD: 100, realUSD: 200 }];
+    expect(isPartialCoverageScenario(rows, 3)).toBe(false);
+  });
+
+  test("returns true when real > estimated × ratio (Issue #77 scenario)", () => {
+    // Mirrors the real Issue #77 data: est=$255, real=$12085 → ~47× ratio
+    const rows = [{ estimatedUSD: 255.18, realUSD: 12085.05 }];
+    expect(isPartialCoverageScenario(rows, 3)).toBe(true);
+  });
+
+  test("uses total across all rows, not per-row", () => {
+    // est total = 50+50 = 100, real total = 200+50 = 250 → 2.5× < 3× → false
+    const rows = [
+      { estimatedUSD: 50, realUSD: 200 },
+      { estimatedUSD: 50, realUSD: 50 },
+    ];
+    expect(isPartialCoverageScenario(rows, 3)).toBe(false);
+  });
+
+  test("returns false when estimated is 0 (seat-only, not partial coverage)", () => {
+    const rows = [{ estimatedUSD: 0, realUSD: 1000 }];
+    expect(isPartialCoverageScenario(rows, 3)).toBe(false);
+  });
+
+  test("returns false when real is 0 (no API traffic to compare)", () => {
+    const rows = [{ estimatedUSD: 100, realUSD: 0 }];
+    expect(isPartialCoverageScenario(rows, 3)).toBe(false);
+  });
+
+  test("threshold is exclusive (exactly ratio× is NOT partial coverage)", () => {
+    // est=100, real=300 → real/est = exactly 3× → not >, so false
+    const rows = [{ estimatedUSD: 100, realUSD: 300 }];
+    expect(isPartialCoverageScenario(rows, 3)).toBe(false);
+  });
+
+  test("threshold is exclusive (ratio×+0.01 IS partial coverage)", () => {
+    const rows = [{ estimatedUSD: 100, realUSD: 300.01 }];
+    expect(isPartialCoverageScenario(rows, 3)).toBe(true);
+  });
+
+  test("respects custom ratio parameter", () => {
+    // With ratio=10: real must be >10× est to trigger
+    const rows = [{ estimatedUSD: 100, realUSD: 500 }]; // 5× < 10×
+    expect(isPartialCoverageScenario(rows, 10)).toBe(false);
+    expect(isPartialCoverageScenario(rows, 4)).toBe(true); // 5× > 4×
   });
 });
