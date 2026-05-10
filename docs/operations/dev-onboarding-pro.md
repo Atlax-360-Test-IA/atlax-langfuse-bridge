@@ -45,6 +45,8 @@ bun install
 
 ## Paso 2 — Ejecutar el script de onboarding PRO
 
+### Opción A — Solo hook Langfuse (telemetría de sesiones)
+
 ```bash
 bash scripts/pilot-onboarding.sh --pro
 ```
@@ -56,10 +58,25 @@ El script hace todo de forma automática:
 3. Instala el reconciler cron (systemd timer, Linux/WSL)
 4. Ejecuta un smoke test contra `langfuse.atlax360.ai`
 
+### Opción B — Hook Langfuse + gateway LiteLLM PRO (recomendado para piloto)
+
+```bash
+bash scripts/pilot-onboarding.sh --pro --litellm
+```
+
+Además de todo lo anterior:
+
+5. Verifica que `litellm.atlax360.ai` está activo
+6. Muestra un menú para seleccionar tu workload (`orvian` o `atalaya`)
+7. Te pide la virtual key (pídela a jgcalvo@atlax360.com)
+8. Añade `ANTHROPIC_BASE_URL` y `ANTHROPIC_API_KEY` a tu `~/.zshrc`
+
+Después de ejecutar: `source ~/.zshrc` para activar el gateway en el terminal actual.
+
 Para ver qué haría sin aplicar cambios:
 
 ```bash
-bash scripts/pilot-onboarding.sh --pro --dry-run
+bash scripts/pilot-onboarding.sh --pro --litellm --dry-run
 ```
 
 ---

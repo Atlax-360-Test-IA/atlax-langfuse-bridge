@@ -2,24 +2,30 @@
 # pilot-onboarding.sh — Onboarding automatizado para devs del piloto Atlax360
 #
 # Configura el hook langfuse-sync.ts + reconciler cron en la máquina del dev.
-# En modo --pro las credenciales PRO están embebidas — no requiere vars de entorno.
+# En modo --pro las credenciales Langfuse PRO están embebidas.
+# En modo --pro --litellm configura además el gateway LiteLLM PRO.
 #
 # Uso:
 #   ./scripts/pilot-onboarding.sh --pro [--dry-run]
-#   ./scripts/pilot-onboarding.sh [--litellm-mode] [--dry-run]
+#   ./scripts/pilot-onboarding.sh --pro --litellm [--dry-run]
+#   ./scripts/pilot-onboarding.sh --pro --litellm --workload=orvian [--dry-run]
 #
 # Flags:
 #   --pro            Modo PRO: usa endpoint langfuse.atlax360.ai con keys embebidas
 #                    + instala el reconciler cron (systemd en Linux/WSL)
-#   --litellm-mode   Configura ANTHROPIC_BASE_URL + virtual key para LiteLLM
+#   --litellm        Configura ANTHROPIC_BASE_URL apuntando a litellm.atlax360.ai.
+#                    Presenta menú interactivo de workload (orvian/atalaya/custom).
+#                    En modo no-interactivo: requiere LITELLM_VIRTUAL_KEY en entorno.
+#   --workload=NAME  Selección de workload sin menú interactivo (orvian|atalaya).
+#                    Requiere LITELLM_VIRTUAL_KEY en entorno con la key real.
 #   --dry-run        Muestra qué haría sin hacer cambios reales
 #
 # Requisitos:
 #   - bun >= 1.3
 #   - git
 #   - jq (para registrar hook en settings.json)
-#   - Sin --pro: variables de entorno LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
-#   - Con --litellm-mode: LITELLM_BASE_URL, LITELLM_VIRTUAL_KEY
+#   - Sin --pro: LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY en entorno
+#   - --litellm no-interactivo: LITELLM_VIRTUAL_KEY en entorno
 
 set -euo pipefail
 
@@ -36,24 +42,37 @@ PRO_LANGFUSE_HOST="https://langfuse.atlax360.ai"
 PRO_LANGFUSE_PUBLIC_KEY="pk-lf-d349eac7-3c3d-40ca-afb3-3a22ce8c848c"
 PRO_LANGFUSE_SECRET_KEY="sk-lf-5b0e6e6b-be6f-4035-95e5-4e27630b2b5e"
 
+# Gateway PRO — URL pública, no es secreto
+PRO_LITELLM_BASE_URL="https://litellm.atlax360.ai"
+
+# Workloads del piloto (alias → descripción / budget)
+declare -A WORKLOAD_DESC=(
+  [orvian]="Orvian — uso general       (\$50/30d, 200k TPM, 100 RPM)"
+  [atalaya]="Atalaya — análisis          (\$20/30d, 100k TPM,  50 RPM)"
+)
+
 # ─── Flags ───────────────────────────────────────────────────────────────────
 
 LITELLM_MODE=false
 DRY_RUN=false
 PRO_MODE=false
+WORKLOAD_NAME=""
 
 for arg in "$@"; do
   case "$arg" in
-    --pro)          PRO_MODE=true ;;
-    --litellm-mode) LITELLM_MODE=true ;;
-    --dry-run)      DRY_RUN=true ;;
+    --pro)            PRO_MODE=true ;;
+    --litellm)        LITELLM_MODE=true ;;
+    # Alias de compatibilidad con la flag anterior
+    --litellm-mode)   LITELLM_MODE=true ;;
+    --workload=*)     WORKLOAD_NAME="${arg#--workload=}" ;;
+    --dry-run)        DRY_RUN=true ;;
     --help|-h)
-      sed -n '2,24p' "$0" | grep '^#' | sed 's/^# \?//'
+      sed -n '2,30p' "$0" | grep '^#' | sed 's/^# \?//'
       exit 0
       ;;
     *)
       echo "ERROR: flag desconocido: $arg" >&2
-      echo "Uso: $0 --pro [--dry-run]" >&2
+      echo "Uso: $0 --pro [--litellm] [--workload=orvian|atalaya] [--dry-run]" >&2
       exit 2
       ;;
   esac
@@ -95,14 +114,22 @@ require_cmd() {
 
 # ─── Checks de entorno ───────────────────────────────────────────────────────
 
+is_interactive() {
+  [[ -t 0 ]]
+}
+
 check_env() {
   local missing=()
   [[ -z "${LANGFUSE_HOST:-}" ]]        && missing+=("LANGFUSE_HOST")
   [[ -z "${LANGFUSE_PUBLIC_KEY:-}" ]]  && missing+=("LANGFUSE_PUBLIC_KEY")
   [[ -z "${LANGFUSE_SECRET_KEY:-}" ]]  && missing+=("LANGFUSE_SECRET_KEY")
 
-  if [[ "$LITELLM_MODE" == "true" ]]; then
-    [[ -z "${LITELLM_BASE_URL:-}" ]]   && missing+=("LITELLM_BASE_URL")
+  # Para --litellm en modo no-interactivo o con --workload: la key debe venir del entorno.
+  # En terminal interactiva el menú la pide — no es un error aquí.
+  if [[ "$LITELLM_MODE" == "true" ]] && ! is_interactive; then
+    [[ -z "${LITELLM_VIRTUAL_KEY:-}" ]] && missing+=("LITELLM_VIRTUAL_KEY")
+  fi
+  if [[ "$LITELLM_MODE" == "true" && -n "$WORKLOAD_NAME" ]]; then
     [[ -z "${LITELLM_VIRTUAL_KEY:-}" ]] && missing+=("LITELLM_VIRTUAL_KEY")
   fi
 
@@ -110,7 +137,7 @@ check_env() {
     echo "ERROR: variables de entorno requeridas no configuradas:" >&2
     printf "  - %s\n" "${missing[@]}" >&2
     echo "" >&2
-    echo "Configúralas en ~/.zshrc o ~/.bashrc antes de ejecutar este script." >&2
+    echo "Configúralas antes de ejecutar este script." >&2
     exit 1
   fi
 }
@@ -262,49 +289,139 @@ EOF
   fi
 }
 
-# ─── Paso 5 (--litellm-mode): Configurar gateway ────────────────────────────
+# ─── Paso 5 (--litellm): Configurar gateway PRO ─────────────────────────────
 
 step_litellm() {
   [[ "$LITELLM_MODE" != "true" ]] && return
 
-  log "Configurando modo LiteLLM gateway..."
+  log "Configurando gateway LiteLLM PRO (litellm.atlax360.ai)..."
 
-  # Verificar que el gateway responde
-  local health_url="${LITELLM_BASE_URL}/health/liveliness"
-  if ! curl -s -o /dev/null -w "%{http_code}" "$health_url" \
-    --max-time 3 2>/dev/null | grep -q "^200$"; then
-    warn "Gateway no responde en $LITELLM_BASE_URL — verifica que está activo"
-    warn "Continúa con la configuración; Claude Code la usará cuando esté disponible"
+  # ── Verificar que el gateway responde ──────────────────────────────────────
+  local health_url="${PRO_LITELLM_BASE_URL}/health/liveliness"
+  local http_code
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" "$health_url" --max-time 8 2>/dev/null || true)
+  if [[ "$http_code" != "200" ]]; then
+    warn "Gateway no responde (HTTP $http_code) — configuramos de todos modos"
   else
-    ok "Gateway activo: $LITELLM_BASE_URL"
+    ok "Gateway activo: $PRO_LITELLM_BASE_URL"
   fi
 
-  # Guardar configuración de LiteLLM en ~/.atlax-ai/litellm.env
+  # ── Obtener virtual key ────────────────────────────────────────────────────
+  local virtual_key="${LITELLM_VIRTUAL_KEY:-}"
+  local workload_alias=""
+
+  if [[ -n "$WORKLOAD_NAME" ]]; then
+    # Modo no-interactivo con --workload=NAME: la key viene del entorno
+    workload_alias="$WORKLOAD_NAME"
+    if [[ -z "$virtual_key" ]]; then
+      echo "ERROR: --workload requiere LITELLM_VIRTUAL_KEY en el entorno" >&2
+      exit 1
+    fi
+  elif [[ -n "$virtual_key" ]]; then
+    # Key ya seteada en entorno (p.ej. Ansible/CI) — usarla directamente
+    workload_alias="custom"
+    ok "LITELLM_VIRTUAL_KEY tomada del entorno"
+  elif is_interactive; then
+    # Terminal interactiva — presentar menú de selección
+    echo ""
+    echo "  ¿Qué workload vas a usar con el gateway?"
+    echo ""
+    echo "  1) ${WORKLOAD_DESC[orvian]}"
+    echo "  2) ${WORKLOAD_DESC[atalaya]}"
+    echo "  3) Key personalizada (pégala cuando se pida)"
+    echo ""
+    local choice
+    read -r -p "  Selección [1/2/3]: " choice
+    case "$choice" in
+      1) workload_alias="orvian" ;;
+      2) workload_alias="atalaya" ;;
+      3) workload_alias="custom" ;;
+      *)
+        echo "ERROR: selección inválida. Vuelve a ejecutar el script." >&2
+        exit 1
+        ;;
+    esac
+
+    if [[ "$workload_alias" == "custom" ]]; then
+      echo ""
+      read -r -s -p "  Pega tu virtual key (sk-...): " virtual_key
+      echo ""
+      if [[ -z "$virtual_key" ]]; then
+        echo "ERROR: key vacía." >&2
+        exit 1
+      fi
+    else
+      echo ""
+      echo "  Pide a jgcalvo@atlax360.com la virtual key para el workload '${workload_alias}'."
+      read -r -s -p "  Pega la virtual key cuando la tengas (sk-...): " virtual_key
+      echo ""
+      if [[ -z "$virtual_key" ]]; then
+        echo "ERROR: key vacía." >&2
+        exit 1
+      fi
+    fi
+  else
+    echo "ERROR: modo no-interactivo sin LITELLM_VIRTUAL_KEY. Configura la variable antes de ejecutar." >&2
+    exit 1
+  fi
+
+  # ── Validar formato mínimo de la key ──────────────────────────────────────
+  if [[ ! "$virtual_key" =~ ^sk- ]]; then
+    echo "ERROR: la virtual key debe empezar por 'sk-'. Revisa que copiaste correctamente." >&2
+    exit 1
+  fi
+
+  # ── Escribir ~/.atlax-ai/litellm.env ──────────────────────────────────────
+  # Solo metadatos — la key NO se escribe en litellm.env para evitar
+  # que el hook la lea como ANTHROPIC_API_KEY accidentalmente.
+  # Las variables de shell se exportan a continuación.
   local litellm_env="$ATLAX_DIR/litellm.env"
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "[dry-run] Escribiría $litellm_env con LITELLM_BASE_URL + LITELLM_VIRTUAL_KEY"
+    echo "[dry-run] Escribiría $litellm_env (solo LITELLM_BASE_URL + LITELLM_WORKLOAD)"
   else
-    cat > "$litellm_env" <<EOF
-LITELLM_BASE_URL=${LITELLM_BASE_URL}
-LITELLM_VIRTUAL_KEY=${LITELLM_VIRTUAL_KEY}
+    (umask 077; cat > "$litellm_env" <<EOF
+LITELLM_BASE_URL=${PRO_LITELLM_BASE_URL}
+LITELLM_WORKLOAD=${workload_alias}
 EOF
-    chmod 600 "$litellm_env"
-    ok "~/.atlax-ai/litellm.env escrito"
+    )
+    ok "~/.atlax-ai/litellm.env escrito (solo metadata, sin key)"
   fi
 
-  # Instrucciones para shell (no podemos modificar el shell del dev desde aquí)
-  echo ""
-  echo "  Añade esto a tu ~/.zshrc o ~/.bashrc para activar el gateway:"
-  echo ""
-  echo "    export ANTHROPIC_BASE_URL=\"${LITELLM_BASE_URL}\""
-  echo "    export ANTHROPIC_API_KEY=\"${LITELLM_VIRTUAL_KEY}\""
-  echo ""
-  echo "  Luego: source ~/.zshrc && claude"
-  echo ""
-  echo "  Para desactivar (volver a Anthropic directo):"
-  echo "    unset ANTHROPIC_BASE_URL"
-  echo "    export ANTHROPIC_API_KEY=\"<tu-key-original-anthropic>\""
-  echo ""
+  # ── Detectar shell rc file ─────────────────────────────────────────────────
+  local shell_rc=""
+  if [[ -n "${ZSH_VERSION:-}" ]] || [[ "${SHELL:-}" == *zsh* ]]; then
+    shell_rc="${HOME}/.zshrc"
+  elif [[ -n "${BASH_VERSION:-}" ]] || [[ "${SHELL:-}" == *bash* ]]; then
+    shell_rc="${HOME}/.bashrc"
+  else
+    shell_rc="${HOME}/.profile"
+  fi
+
+  # ── Inyectar exports en el shell rc (idempotente) ────────────────────────
+  local marker="# atlax-litellm-gateway"
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "[dry-run] Inyectaría en $shell_rc:"
+    echo "  export ANTHROPIC_BASE_URL=\"$PRO_LITELLM_BASE_URL\""
+    echo "  export ANTHROPIC_API_KEY=\"<virtual-key>\""
+  else
+    if grep -q "$marker" "$shell_rc" 2>/dev/null; then
+      ok "$shell_rc ya tiene los exports del gateway — sin cambios"
+    else
+      cat >> "$shell_rc" <<EOF
+
+${marker}
+export ANTHROPIC_BASE_URL="${PRO_LITELLM_BASE_URL}"
+export ANTHROPIC_API_KEY="${virtual_key}"
+# Para desactivar: unset ANTHROPIC_BASE_URL && export ANTHROPIC_API_KEY=<tu-key-anthropic>
+EOF
+      ok "Exports añadidos a $shell_rc"
+      echo ""
+      echo "  ╔═══════════════════════════════════════════════════════╗"
+      echo "  ║  Ejecuta: source ${shell_rc}           ║"
+      echo "  ║  o abre un nuevo terminal para activar el gateway.   ║"
+      echo "  ╚═══════════════════════════════════════════════════════╝"
+    fi
+  fi
 }
 
 # ─── Paso 5: Smoke test ──────────────────────────────────────────────────────
@@ -345,12 +462,17 @@ step_summary() {
   echo "  2. Ciérrala normalmente (el hook se dispara al cerrar)"
   echo "  3. Comprueba en Langfuse que aparece un nuevo trace"
   echo "     → ${LANGFUSE_HOST:-https://langfuse.atlax360.ai}"
+  local step=4
   if [[ "$PRO_MODE" == "true" ]]; then
-    echo "  4. Verifica el cron reconciler:"
+    echo "  ${step}. Verifica el cron reconciler:"
     echo "     systemctl --user status atlax-langfuse-reconcile.timer"
+    (( step++ )) || true
   fi
   if [[ "$LITELLM_MODE" == "true" ]]; then
-    echo "  4. Verifica que el trace tiene user_api_key_alias en metadata"
+    echo "  ${step}. Abre una sesión de Claude Code — irá por el gateway LiteLLM"
+    (( step++ )) || true
+    echo "  ${step}. Verifica en Langfuse que aparece un trace litellm-acompletion"
+    echo "     → ${PRO_LANGFUSE_HOST}"
   fi
   echo ""
   echo "  Documentación:"
@@ -368,7 +490,7 @@ main() {
     echo "(modo dry-run — sin cambios reales)"
   fi
   if [[ "$LITELLM_MODE" == "true" ]]; then
-    echo "(modo LiteLLM gateway activado)"
+    echo "(modo LiteLLM gateway → litellm.atlax360.ai)"
   fi
   echo ""
 
