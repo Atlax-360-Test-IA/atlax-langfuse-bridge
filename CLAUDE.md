@@ -26,7 +26,7 @@ piezas coordinadas:
 ## Categoría Shared Platform — `edge-tooling` + `server-only`
 
 Este proyecto pertenece a dos categorías del patrón Atlax 360 AI Suite Shared
-Platform (ver `~/work/kairos/docs/atlax-ai-shared-platform.md` v0.3 §3.1):
+Platform (ver https://github.com/atlax-360-ai-suite/ai-suite-platform/blob/main/docs/SPEC.md v0.4 §3.1):
 
 - **`edge-tooling`**: hook + reconciler + scripts viven en la laptop del dev,
   sin servidor HTTP permanente. Invariantes que NO aplican: `getAuthContext`,
