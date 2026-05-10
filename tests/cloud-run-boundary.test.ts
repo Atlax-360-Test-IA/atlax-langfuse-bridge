@@ -69,8 +69,9 @@ describe("isSafeHost accepts Cloud Run URLs (PRO migration path)", () => {
     expect(isSafeHost("https://langfuse-web-abc123-ew.a.run.app")).toBe(true);
   });
 
-  test("accepts custom domain over HTTPS", () => {
-    expect(isSafeHost("https://langfuse.atlax360.com")).toBe(true);
+  test("accepts custom domain over HTTPS (PRO: langfuse.atlax360.ai)", () => {
+    // Canonical PRO domain — migrated to .ai in F4 (was .com in initial plan)
+    expect(isSafeHost("https://langfuse.atlax360.ai")).toBe(true);
   });
 
   test("rejects http://*.run.app (no TLS)", () => {
@@ -146,7 +147,72 @@ describe("infra/cloud-run.yaml reference manifest", () => {
   });
 });
 
-// ─── 5. backup-story.md is present ───────────────────────────────────────────
+// ─── 5. F3/F4 operational learnings — regression guards ─────────────────────
+//
+// These tests encode behaviors discovered during PRO migration execution.
+// If they fail, someone changed the manifest in a way that contradicts
+// hard-won production knowledge.
+
+describe("cloud-run.yaml — F3 Redis TLS (Memorystore)", () => {
+  const manifestPath = join(REPO_ROOT, "infra", "cloud-run.yaml");
+  const manifest = readFileSync(manifestPath, "utf-8");
+
+  test("REDIS_PORT is 6378, not 6379 (Memorystore TLS uses 6378)", () => {
+    // Memorystore with SERVER_AUTHENTICATION transitEncryptionMode binds on 6378.
+    // Setting 6379 causes connection refused — silent failure in Cloud Run.
+    expect(manifest).toContain('value: "6378"');
+    expect(manifest).not.toMatch(/name: REDIS_PORT\s*\n\s*value: "6379"/);
+  });
+
+  test("REDIS_TLS_ENABLED is true (Memorystore requires TLS)", () => {
+    expect(manifest).toContain("name: REDIS_TLS_ENABLED");
+    expect(manifest).toContain('value: "true"');
+  });
+
+  test("NODE_TLS_REJECT_UNAUTHORIZED is 0 (Google CA not in Node.js bundle)", () => {
+    // Memorystore uses Google's own CA. Node.js bundle lacks it.
+    // The VPC encryption ensures confidentiality; cert verification disabled.
+    expect(manifest).toContain("name: NODE_TLS_REJECT_UNAUTHORIZED");
+    expect(manifest).toContain('value: "0"');
+  });
+});
+
+describe("cloud-run.yaml — F3 ClickHouse user (langfuse, not default)", () => {
+  const manifestPath = join(REPO_ROOT, "infra", "cloud-run.yaml");
+  const manifest = readFileSync(manifestPath, "utf-8");
+
+  test("CLICKHOUSE_USER is langfuse (not default)", () => {
+    // ClickHouse PRO container runs as user 'langfuse', not 'default'.
+    // Using 'default' causes auth failures — tables exist in DB 'default'
+    // but the user that owns them is 'langfuse'.
+    expect(manifest).toContain("name: CLICKHOUSE_USER");
+    expect(manifest).toContain("value: langfuse");
+    expect(manifest).not.toMatch(/name: CLICKHOUSE_USER\s*\n\s*value: default/);
+  });
+});
+
+describe("cloud-run.yaml — F4 custom domain (langfuse.atlax360.ai)", () => {
+  const manifestPath = join(REPO_ROOT, "infra", "cloud-run.yaml");
+  const manifest = readFileSync(manifestPath, "utf-8");
+
+  test("NEXTAUTH_URL points to canonical PRO domain (not .run.app)", () => {
+    // .run.app URL breaks NextAuth callbacks after F4 LB cutover.
+    // Must match the domain on the SSL certificate served by the LB.
+    expect(manifest).toContain("value: https://langfuse.atlax360.ai");
+    expect(manifest).not.toContain("langfuse.atlax360.com");
+  });
+
+  test("web service ingress is internal-and-cloud-load-balancing (not all)", () => {
+    // After F4: Serverless NEG + Cloud LB fronts web.
+    // ingress=all exposes .run.app URL directly — bypasses Cloud Armor.
+    // ingress=internal-and-cloud-load-balancing: LB can reach it, direct .run.app cannot.
+    expect(manifest).toContain(
+      "run.googleapis.com/ingress: internal-and-cloud-load-balancing",
+    );
+  });
+});
+
+// ─── 6. backup-story.md is present ───────────────────────────────────────────
 
 describe("infra/backup-story.md PRO backup plan", () => {
   const story = readFileSync(

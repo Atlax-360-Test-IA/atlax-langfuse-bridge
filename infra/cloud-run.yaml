@@ -47,8 +47,10 @@ metadata:
     cloud.googleapis.com/location: europe-west1
   annotations:
     run.googleapis.com/launch-stage: GA
-    # Direct VPC egress (GA, sustituye a Serverless VPC Access connector legacy)
-    run.googleapis.com/ingress: all
+    # F4 (2026-05-10): ingress=internal-and-cloud-load-balancing tras activar Cloud LB.
+    # Bloquea acceso directo a .run.app — solo el LB puede invocar el servicio.
+    # allUsers invoker es obligatorio (Serverless NEG no pasa IAM tokens).
+    run.googleapis.com/ingress: internal-and-cloud-load-balancing
 spec:
   template:
     metadata:
