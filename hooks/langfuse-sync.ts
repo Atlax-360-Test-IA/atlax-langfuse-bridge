@@ -209,7 +209,7 @@ export function detectOS(): OSName {
 
 // ─── Langfuse REST ingestion ──────────────────────────────────────────────────
 
-async function sendToLangfuse(batch: unknown[]): Promise<void> {
+export async function sendToLangfuse(batch: unknown[]): Promise<void> {
   const rawHost = process.env["LANGFUSE_HOST"] ?? "https://cloud.langfuse.com";
   if (!isSafeHost(rawHost)) {
     await emitDegradation(

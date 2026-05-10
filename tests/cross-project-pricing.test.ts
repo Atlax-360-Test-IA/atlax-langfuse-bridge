@@ -153,9 +153,7 @@ describe("cross-project pricing consistency (S17-C)", () => {
       if (!dashboardExists) return;
       const dashEntry = dashboardModels[model];
       if (!dashEntry) {
-        // Dashboard doesn't have this model — log but don't fail
-        console.warn(`[cross-pricing] Dashboard missing model: ${model}`);
-        return;
+        return; // documented gap — see "bridge has claude-opus-4-7 entry" test below
       }
       const bridgeEntry = getPricing(model);
       expect(bridgeEntry.input).toBe(dashEntry.inputPerMtok);
