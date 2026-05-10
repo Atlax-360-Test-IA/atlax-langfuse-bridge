@@ -457,6 +457,13 @@ spec:
               value: https://langfuse.atlax360.ai
             - name: STORE_MODEL_IN_DB
               value: "true"
+            # Google Chat webhook para alertas de budget. Si no está set,
+            # LiteLLM solo loguea el warning en stdout.
+            - name: LITELLM_ALERT_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-gchat-webhook-url
+                  key: latest
           # Cloud Run no soporta subPath en secretos — montamos como directorio
           # LiteLLM arranca con: litellm --config /app/secret/config.yaml
           args: ["--config", "/app/secret/config.yaml"]

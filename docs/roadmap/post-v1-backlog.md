@@ -56,6 +56,54 @@
 - **Riesgo**: pricing de proveedores no-Anthropic requiere tabla nueva en
   `shared/model-pricing.ts` o fuente externa
 
+### PV1-D1 · Vertex traces + cost capture (Seat Team quota management)
+
+- **Por qué**: varios miembros del equipo están alcanzando cuotas semanales de Seat Team.
+  El bridge hoy solo captura trazas de Anthropic API directa — el tráfico Vertex queda ciego.
+  Necesitamos visibilidad de coste y uso de Vertex para gestionar proactivamente las cuotas
+  y tomar decisiones de routing (Seat Team vs Vertex vs API-key directa).
+- **Impacto**: visibilidad FinOps completa para todos los canales Claude del equipo;
+  KPI "quota headroom" medible; base para routing inteligente en LiteLLM M4
+- **Effort**: V1 = S (2-3d) — GCP Billing Export to BigQuery, sin cambios en bridge
+- **Opciones de implementación**:
+  - **V1 (NOW)**: GCP Billing Export → BigQuery. Activar export en proyecto Atlax Billing.
+    Crear dataset `atlax360-billing.vertex_usage`. Conectar Looker Studio o query manual.
+    No requiere cambios en código del bridge. Latencia de datos: ~24h (billing export delay).
+    Coste: ~$0 (BigQuery storage + queries mínimas). Sin granularidad de sesión — solo por día/modelo.
+  - **V2**: LiteLLM route Vertex calls through gateway. Añadir `vertex_ai/` models en
+    `litellm-config.yaml`. Trazas Vertex aparecen en Langfuse con callback existente.
+    Requiere SA Vertex en Secret Manager + modelo pricing Vertex en `shared/model-pricing.ts`.
+    Latencia real. Dep: PV1-B1 validado.
+  - **V3**: Custom OpenTelemetry instrumentation en workloads Vertex. Máxima granularidad
+    pero máximo esfuerzo — out of scope hasta que V2 esté validado.
+- **Decisión 2026-05-10**: arrancar con **V1** (GCP Billing Export). Bajo esfuerzo, visibilidad
+  inmediata. V2 cuando el piloto LiteLLM tenga ≥3 devs activos. V3 fuera de scope v1.
+- **Pasos V1**:
+  1. En `console.cloud.google.com/billing` → Billing Export → BigQuery export: activar
+     "Detailed usage cost" + "Pricing" en proyecto billing de Atlax360
+  2. Dataset destino: `atlax360-billing.gcp_billing_export` (crear si no existe)
+  3. Query de ejemplo para Vertex usage:
+     ```sql
+     SELECT
+       DATE(usage_start_time) AS date,
+       service.description AS service,
+       sku.description AS sku,
+       SUM(cost) AS total_cost_usd,
+       SUM(usage.amount) AS total_usage,
+       usage.unit AS unit
+     FROM `atlax360-billing.gcp_billing_export.gcp_billing_export_v1_*`
+     WHERE service.description LIKE '%Vertex%'
+       AND DATE(usage_start_time) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+     GROUP BY 1, 2, 3, 6
+     ORDER BY 1 DESC, 4 DESC
+     ```
+  4. Conectar Looker Studio al dataset para dashboard visual (opcional pero recomendado)
+- **Dep**: acceso billing admin en proyecto GCP de Atlax360 (jgcalvo o frsalas)
+- **Riesgo V1**: datos agregados por día, sin granularidad de sesión ni usuario.
+  Suficiente para gestión de cuotas pero no para atribución individual.
+- **Criterio de upgrade a V2**: ≥3 devs usando Vertex regularmente + necesidad de
+  atribución por dev en Langfuse
+
 ### PV1-B3 · Dashboard → Langfuse API (drill-down por sesión)
 
 - **Por qué**: RFC-002 decidió que el dashboard no necesita HTTP del bridge para v1.
