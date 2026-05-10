@@ -3,9 +3,12 @@
 > **Para**: devs del piloto Atlax360 que quieren usar LiteLLM como gateway
 > para Claude Code (y opcionalmente Cline en VSCode).
 >
-> **Requisito previo**: el stack Langfuse + LiteLLM ya está levantado por el
-> admin del equipo. Si no es así, ver
-> [`runbook.md § Operaciones de LiteLLM Gateway`](./runbook.md#operaciones-de-litellm-gateway).
+> **Gateway PRO**: `https://litellm.atlax360.ai` — ya está desplegado y operativo.
+> No necesitas levantar nada en local. Pide tu virtual key al admin y configura
+> las variables de entorno (Pasos 1 y 2).
+>
+> **Gateway local (opcional)**: si prefieres desarrollo local o necesitas depurar,
+> ver [`runbook.md § Operaciones de LiteLLM Gateway (local)`](./runbook.md#operaciones-de-litellm-gateway-local--dev).
 
 ---
 
@@ -13,7 +16,7 @@
 
 Sin gateway: `Claude Code → Anthropic API`
 
-Con gateway: `Claude Code → LiteLLM (localhost:4001) → Anthropic API`
+Con gateway: `Claude Code → LiteLLM (litellm.atlax360.ai) → Anthropic API`
 
 El gateway añade:
 
@@ -25,21 +28,32 @@ El gateway añade:
 
 ## Paso 1 · Obtener tu virtual key
 
-El admin provisiona las keys. Pídele que ejecute:
+El admin provisiona las keys. Pídele a jgcalvo@atlax360.com que te asigne una.
+
+Para el piloto inicial hay dos workloads disponibles:
+
+| Alias          | Para qué workload    | Budget  | Límites           |
+| -------------- | -------------------- | ------- | ----------------- |
+| `orvian-prod`  | Orvian (uso general) | $50/30d | 200k TPM, 100 RPM |
+| `atalaya-prod` | Atalaya (análisis)   | $20/30d | 100k TPM, 50 RPM  |
+
+Si necesitas una key personalizada para tu equipo, el admin ejecutará:
 
 ```bash
-# El admin crea tu key (ejecutar en el servidor del gateway)
-curl -s -X POST http://localhost:4001/key/generate \
+# El admin crea tu key en el gateway PRO
+LITELLM_MASTER_KEY=$(gcloud secrets versions access latest \
+  --secret=litellm-master-key --project=atlax360-ai-langfuse-pro)
+
+curl -s -X POST https://litellm.atlax360.ai/key/generate \
   -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "key_alias": "<tu-alias>",
-    "max_budget": 50.00,
-    "soft_budget": 40.00,
+    "soft_budget": 50.00,
     "budget_duration": "30d",
     "user_id": "<tu-email>",
-    "metadata": {"team": "atlax360"}
-  }' | jq '{key: .key, key_alias: .key_alias, max_budget: .max_budget}'
+    "metadata": {"team": "atlax360", "env": "prod"}
+  }' | jq '{key: .key, key_alias: .key_alias}'
 ```
 
 Recibirás un token con formato `sk-...`. **Guárdalo en tu gestor de secretos.**
@@ -50,7 +64,7 @@ Recibirás un token con formato `sk-...`. **Guárdalo en tu gestor de secretos.*
 
 ```bash
 # Añadir a ~/.zshrc o ~/.bashrc
-export ANTHROPIC_BASE_URL="http://localhost:4001"
+export ANTHROPIC_BASE_URL="https://litellm.atlax360.ai"
 export ANTHROPIC_API_KEY="sk-<tu-virtual-key>"
 ```
 
@@ -67,8 +81,8 @@ claude --version
 # La sesión siguiente ya pasa por LiteLLM
 ```
 
-> **Sin gateway activo**: si LiteLLM está caído, Claude Code falla. Cuando
-> necesites seguir trabajando sin gateway, restaura las variables originales:
+> **Sin gateway activo**: si necesitas seguir trabajando sin gateway (mantenimiento,
+> incidencia), restaura las variables originales:
 > `unset ANTHROPIC_BASE_URL && export ANTHROPIC_API_KEY=<tu-key-original>`.
 
 ---
@@ -83,7 +97,7 @@ PK=<langfuse-public-key>
 SK=<langfuse-secret-key>
 AUTH=$(echo -n "$PK:$SK" | base64)
 
-curl -s "http://localhost:3000/api/public/traces?limit=5&name=litellm-acompletion" \
+curl -s "https://langfuse.atlax360.ai/api/public/traces?limit=5&name=litellm-acompletion" \
   -H "Authorization: Basic $AUTH" \
   | jq '[.data[] | {alias: .observations[0].metadata.user_api_key_alias, created: .createdAt[0:19]}]'
 ```
@@ -100,7 +114,7 @@ Deberías ver `"alias": "<tu-alias>"` en el resultado.
 1. Instalar extensión **Cline** en VSCode.
 2. Abrir Settings → Cline → API Provider → seleccionar **OpenAI Compatible**.
 3. Configurar:
-   - **Base URL**: `http://localhost:4001/v1`
+   - **Base URL**: `https://litellm.atlax360.ai/v1`
    - **API Key**: `sk-<tu-virtual-key>`
    - **Model**: `anthropic/claude-sonnet-4-6`
 4. Probar con un prompt sencillo.
@@ -114,13 +128,11 @@ Reportar cualquier problema al canal `#atlax-ai-pilot`.
 
 ```bash
 # Listar información de tu key (replace <tu-alias>)
-curl -s "http://localhost:4001/key/list?key_alias=<tu-alias>" \
+# Pide la master key al admin si no la tienes
+curl -s "https://litellm.atlax360.ai/key/list?key_alias=<tu-alias>" \
   -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
-  | jq '.keys[0]'
+  | jq '.keys[0] | {key_alias, spend, soft_budget, budget_duration}'
 ```
-
-O en la UI de LiteLLM (si el admin ha habilitado acceso):
-`http://localhost:4001/ui` → Keys → buscar tu alias.
 
 ---
 
@@ -158,14 +170,14 @@ Cursor con proxy).
 
 ## Resolución de problemas
 
-| Síntoma                               | Causa probable               | Solución                                                                    |
-| ------------------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
-| `401 Unauthorized`                    | Key incorrecta o expirada    | Verificar `ANTHROPIC_API_KEY` en env; pedir al admin re-provisionar         |
-| `400 Budget has been exceeded`        | Spend agotado                | Contactar admin para reset/ampliación                                       |
-| `Connection refused localhost:4001`   | Gateway caído                | `docker compose --profile litellm up -d` (el admin)                         |
-| Trace no aparece en Langfuse          | Callback async — esperar 30s | Refrescar; si persiste >2min, ver logs: `docker compose logs litellm`       |
-| `user_api_key_alias` null en Langfuse | LiteLLM v1.83.7 bug          | Upgrade de imagen pendiente; `key_alias` sí llega en metadata de generation |
+| Síntoma                                             | Causa probable               | Solución                                                                                   |
+| --------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------ |
+| `401 Unauthorized`                                  | Key incorrecta o expirada    | Verificar `ANTHROPIC_API_KEY` en env; pedir al admin re-provisionar                        |
+| `400 Budget has been exceeded`                      | Spend agotado                | Contactar admin para reset/ampliación                                                      |
+| `Connection refused` / `502` en litellm.atlax360.ai | Gateway Cloud Run caído      | Contactar jgcalvo@atlax360.com; status en `gcloud run services list --region=europe-west1` |
+| Trace no aparece en Langfuse                        | Callback async — esperar 30s | Refrescar; si persiste >2min, ver logs en Cloud Logging del servicio `litellm`             |
+| `user_api_key_alias` null en Langfuse               | LiteLLM v1.83.7 bug          | Upgrade de imagen pendiente; `key_alias` sí llega en metadata de generation                |
 
 ---
 
-_Última actualización: S21-A (Sprint 21, 2026-05-07)_
+_Última actualización: pilot-readiness-day0 (2026-05-10) — gateway PRO activo en litellm.atlax360.ai_

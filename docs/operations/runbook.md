@@ -188,9 +188,117 @@ journalctl --user -u atlax-langfuse-reconcile.service -n 200 \
 
 ---
 
-## Operaciones de LiteLLM Gateway
+## Operaciones de LiteLLM Gateway PRO
 
-> El gateway es **opt-in**. Requiere `docker compose --profile litellm up -d`.
+> El gateway PRO está disponible en `https://litellm.atlax360.ai` (Cloud Run).
+> Para el stack local de desarrollo, ver la sección de docker a continuación.
+
+### Resetear spend de un dev (admin)
+
+Cuando un dev agota su virtual key budget antes del ciclo de 30 días:
+
+```bash
+# Obtener la master key del gateway PRO
+LITELLM_MASTER_KEY=$(gcloud secrets versions access latest \
+  --secret=litellm-master-key \
+  --project=atlax360-ai-langfuse-pro)
+
+# Listar key del dev por alias
+curl -s "https://litellm.atlax360.ai/key/list?key_alias=<alias-del-dev>" \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  | jq '.keys[0] | {key_hash: .token, current_spend: .spend}'
+
+# Resetear spend a 0 (reemplaza <KEY_HASH> con el valor de token)
+curl -s -X POST "https://litellm.atlax360.ai/key/update" \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"key": "<KEY_HASH>", "spend": 0}'
+```
+
+> ⚠️ No confundir con rotar la key. El dev no necesita actualizar su `ANTHROPIC_API_KEY` —
+> solo se resetea el contador de spend.
+
+### Rotar ANTHROPIC_API_KEY en Secret Manager + redeploy
+
+Cuando la clave Anthropic corporativa se rota (mensual o tras compromiso):
+
+```bash
+# 1. Verificar que tienes la nueva clave lista (sk-ant-api03-...)
+NEW_KEY="sk-ant-api03-NUEVA_CLAVE_AQUI"
+
+# 2. Crear nueva versión del secret (no destruye la anterior)
+echo -n "$NEW_KEY" | gcloud secrets versions add litellm-anthropic-api-key \
+  --data-file=- \
+  --project=atlax360-ai-langfuse-pro
+
+# 3. Verificar que la versión se creó correctamente
+gcloud secrets versions list litellm-anthropic-api-key \
+  --project=atlax360-ai-langfuse-pro
+
+# 4. Forzar nuevo despliegue (Cloud Run recarga secrets al arrancar nueva instancia)
+gcloud run services update litellm \
+  --region=europe-west1 \
+  --project=atlax360-ai-langfuse-pro \
+  --no-traffic
+
+# 5. Promover con validación
+gcloud run services update-traffic litellm \
+  --to-revisions=LATEST=100 \
+  --region=europe-west1 \
+  --project=atlax360-ai-langfuse-pro
+
+# 6. Smoke test post-rotación
+bun run scripts/smoke-litellm-pro-e2e.ts
+# Esperado: 4/4 checks passed
+```
+
+> ⚠️ Las virtual keys de los devs (orvian-prod, atalaya-prod) NO se invalidan al rotar
+> `ANTHROPIC_API_KEY`. Solo el gateway interno se reconecta con la nueva clave.
+
+### Continuidad operativa — roles y acceso
+
+Para garantizar que el servicio puede mantenerse ante ausencia de cualquier operador:
+
+| Rol                  | Persona                 | Acceso requerido                                            |
+| -------------------- | ----------------------- | ----------------------------------------------------------- |
+| Operador principal   | jgcalvo@atlax360.com    | Owner proyecto GCP `atlax360-ai-langfuse-pro`               |
+| Segundo operador     | Asignar de equipo Atlax | Roles: `run.admin`, `secretmanager.admin`, `cloudsql.admin` |
+| Acceso de emergencia | Cualquier admin org     | `resourcemanager.organizationAdmin` en org Atlax360         |
+
+**Asignar segundo operador:**
+
+```bash
+# Reemplaza SEGUNDO_EMAIL con el email del segundo operador
+SEGUNDO_EMAIL="segundo@atlax360.com"
+PROJECT="atlax360-ai-langfuse-pro"
+
+gcloud projects add-iam-policy-binding "$PROJECT" \
+  --member="user:$SEGUNDO_EMAIL" \
+  --role="roles/run.admin"
+
+gcloud projects add-iam-policy-binding "$PROJECT" \
+  --member="user:$SEGUNDO_EMAIL" \
+  --role="roles/secretmanager.admin"
+
+gcloud projects add-iam-policy-binding "$PROJECT" \
+  --member="user:$SEGUNDO_EMAIL" \
+  --role="roles/cloudsql.admin"
+```
+
+**Secrets críticos que el segundo operador debe conocer (no los valores, pero sí dónde están):**
+
+| Secret                      | Qué es                               | Rotación                  |
+| --------------------------- | ------------------------------------ | ------------------------- |
+| `litellm-master-key`        | Gate admin del gateway               | No rotar salvo compromiso |
+| `litellm-salt-key`          | Cifra virtual keys — **NUNCA rotar** | Inmutable                 |
+| `litellm-anthropic-api-key` | Clave Anthropic corporativa          | Mensual                   |
+| `litellm-gchat-webhook-url` | Webhook alertas Google Chat          | Si se rota el espacio     |
+
+---
+
+## Operaciones de LiteLLM Gateway (local / dev)
+
+> Para desarrollo local. Requiere `docker compose --profile litellm up -d`.
 
 ### Activar LiteLLM M1 (primera vez)
 
