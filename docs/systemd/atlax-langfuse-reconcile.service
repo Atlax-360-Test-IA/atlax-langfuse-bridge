@@ -8,7 +8,7 @@ Documentation=https://github.com/Atlax-360-Test-IA/atlax-langfuse-bridge
 Type=oneshot
 # Load Langfuse credentials from a user-scoped env file.
 # Create %h/.atlax-ai/reconcile.env with:
-#   LANGFUSE_HOST=https://langfuse.atlax360.com
+#   LANGFUSE_HOST=https://langfuse.atlax360.ai
 #   LANGFUSE_PUBLIC_KEY=pk-lf-...
 #   LANGFUSE_SECRET_KEY=sk-lf-...
 #   WINDOW_HOURS=24

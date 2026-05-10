@@ -11,7 +11,7 @@ machine reboots before `Stop` fires.
 # 1. Create the env file with your Langfuse credentials
 mkdir -p ~/.atlax-ai
 cat > ~/.atlax-ai/reconcile.env <<'EOF'
-LANGFUSE_HOST=https://langfuse.atlax360.com
+LANGFUSE_HOST=https://langfuse.atlax360.ai
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
 WINDOW_HOURS=24

@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
 # pilot-onboarding.sh — Onboarding automatizado para devs del piloto Atlax360
 #
-# Configura el hook langfuse-sync.ts en la máquina del dev y opcionalmente
-# redirige Claude Code a través del LiteLLM gateway (--litellm-mode).
+# Configura el hook langfuse-sync.ts + reconciler cron en la máquina del dev.
+# En modo --pro las credenciales PRO están embebidas — no requiere vars de entorno.
 #
 # Uso:
+#   ./scripts/pilot-onboarding.sh --pro [--dry-run]
 #   ./scripts/pilot-onboarding.sh [--litellm-mode] [--dry-run]
 #
 # Flags:
+#   --pro            Modo PRO: usa endpoint langfuse.atlax360.ai con keys embebidas
+#                    + instala el reconciler cron (systemd en Linux/WSL)
 #   --litellm-mode   Configura ANTHROPIC_BASE_URL + virtual key para LiteLLM
 #   --dry-run        Muestra qué haría sin hacer cambios reales
 #
 # Requisitos:
 #   - bun >= 1.3
 #   - git
-#   - jq (solo con --litellm-mode)
-#   - Variables de entorno: LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
+#   - jq (para registrar hook en settings.json)
+#   - Sin --pro: variables de entorno LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
 #   - Con --litellm-mode: LITELLM_BASE_URL, LITELLM_VIRTUAL_KEY
 
 set -euo pipefail
@@ -28,26 +31,41 @@ CLAUDE_SETTINGS_DIR="${HOME}/.claude"
 CLAUDE_SETTINGS_FILE="$CLAUDE_SETTINGS_DIR/settings.json"
 ATLAX_DIR="${HOME}/.atlax-ai"
 
+# PRO endpoint y keys (embebidas — se distribuyen con el script; no son secreto de infra)
+PRO_LANGFUSE_HOST="https://langfuse.atlax360.ai"
+PRO_LANGFUSE_PUBLIC_KEY="pk-lf-d349eac7-3c3d-40ca-afb3-3a22ce8c848c"
+PRO_LANGFUSE_SECRET_KEY="sk-lf-5b0e6e6b-be6f-4035-95e5-4e27630b2b5e"
+
 # ─── Flags ───────────────────────────────────────────────────────────────────
 
 LITELLM_MODE=false
 DRY_RUN=false
+PRO_MODE=false
 
 for arg in "$@"; do
   case "$arg" in
+    --pro)          PRO_MODE=true ;;
     --litellm-mode) LITELLM_MODE=true ;;
     --dry-run)      DRY_RUN=true ;;
     --help|-h)
-      sed -n '2,20p' "$0" | grep '^#' | sed 's/^# \?//'
+      sed -n '2,24p' "$0" | grep '^#' | sed 's/^# \?//'
       exit 0
       ;;
     *)
       echo "ERROR: flag desconocido: $arg" >&2
-      echo "Uso: $0 [--litellm-mode] [--dry-run]" >&2
+      echo "Uso: $0 --pro [--dry-run]" >&2
       exit 2
       ;;
   esac
 done
+
+# En modo --pro, forzar las vars PRO (sobreescribe entorno local que pueda
+# apuntar a localhost o instancia de dev)
+if [[ "$PRO_MODE" == "true" ]]; then
+  LANGFUSE_HOST="$PRO_LANGFUSE_HOST"
+  LANGFUSE_PUBLIC_KEY="$PRO_LANGFUSE_PUBLIC_KEY"
+  LANGFUSE_SECRET_KEY="$PRO_LANGFUSE_SECRET_KEY"
+fi
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -190,7 +208,61 @@ step_hook() {
   ok "Hook Stop registrado en $CLAUDE_SETTINGS_FILE"
 }
 
-# ─── Paso 4 (--litellm-mode): Configurar gateway ────────────────────────────
+# ─── Paso 4 (--pro): Instalar reconciler cron ────────────────────────────────
+
+step_reconciler() {
+  [[ "$PRO_MODE" != "true" ]] && return
+
+  log "Instalando reconciler cron (systemd user)..."
+
+  # Escribir reconcile.env con las credenciales PRO
+  local env_file="$ATLAX_DIR/reconcile.env"
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "[dry-run] Escribiría $env_file con credenciales PRO + WINDOW_HOURS=24"
+  else
+    cat > "$env_file" <<EOF
+LANGFUSE_HOST=${LANGFUSE_HOST}
+LANGFUSE_BASE_URL=${LANGFUSE_HOST}
+LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+WINDOW_HOURS=24
+LANGFUSE_FORCE_NOW_TIMESTAMP=1
+EOF
+    chmod 600 "$env_file"
+    ok "~/.atlax-ai/reconcile.env escrito (chmod 600)"
+  fi
+
+  # Detectar sistema: solo Linux/WSL soportan systemd user units
+  if ! command -v systemctl >/dev/null 2>&1; then
+    warn "systemctl no encontrado — omitiendo instalación de cron (macOS/Windows: ver docs/systemd/README.md)"
+    return
+  fi
+
+  local systemd_user_dir="${HOME}/.config/systemd/user"
+  local service_src="$REPO_DIR/docs/systemd/atlax-langfuse-reconcile.service"
+  local timer_src="$REPO_DIR/docs/systemd/atlax-langfuse-reconcile.timer"
+
+  if [[ ! -f "$service_src" || ! -f "$timer_src" ]]; then
+    warn "Archivos systemd no encontrados en $REPO_DIR/docs/systemd/ — omitiendo"
+    return
+  fi
+
+  run mkdir -p "$systemd_user_dir"
+  run cp "$service_src" "$systemd_user_dir/"
+  run cp "$timer_src"   "$systemd_user_dir/"
+
+  if [[ "$DRY_RUN" == "false" ]]; then
+    systemctl --user daemon-reload
+    systemctl --user enable --now atlax-langfuse-reconcile.timer
+    ok "Reconciler timer instalado y activo"
+    systemctl --user list-timers atlax-langfuse-reconcile.timer --no-pager 2>/dev/null || true
+  else
+    echo "[dry-run] systemctl --user daemon-reload"
+    echo "[dry-run] systemctl --user enable --now atlax-langfuse-reconcile.timer"
+  fi
+}
+
+# ─── Paso 5 (--litellm-mode): Configurar gateway ────────────────────────────
 
 step_litellm() {
   [[ "$LITELLM_MODE" != "true" ]] && return
@@ -272,13 +344,17 @@ step_summary() {
   echo "  1. Abre una sesión de Claude Code"
   echo "  2. Ciérrala normalmente (el hook se dispara al cerrar)"
   echo "  3. Comprueba en Langfuse que aparece un nuevo trace"
-  echo "     → $LANGFUSE_HOST"
+  echo "     → ${LANGFUSE_HOST:-https://langfuse.atlax360.ai}"
+  if [[ "$PRO_MODE" == "true" ]]; then
+    echo "  4. Verifica el cron reconciler:"
+    echo "     systemctl --user status atlax-langfuse-reconcile.timer"
+  fi
   if [[ "$LITELLM_MODE" == "true" ]]; then
     echo "  4. Verifica que el trace tiene user_api_key_alias en metadata"
   fi
   echo ""
   echo "  Documentación:"
-  echo "  → $REPO_DIR/docs/operations/litellm-onboarding.md"
+  echo "  → $REPO_DIR/docs/operations/dev-onboarding-pro.md"
   echo "  → $REPO_DIR/docs/operations/runbook.md"
   echo ""
 }
@@ -300,6 +376,7 @@ main() {
   step_prereqs
   step_atlax_dir
   step_hook
+  step_reconciler
   step_litellm
   step_smoke
   step_summary
