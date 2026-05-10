@@ -24,7 +24,7 @@ import { loadEnvFile } from "../shared/env-loader";
 
 // ─── Workload definitions ────────────────────────────────────────────────────
 
-interface WorkloadConfig {
+export interface WorkloadConfig {
   key_alias: string;
   soft_budget: number;
   budget_duration: string;
@@ -34,7 +34,7 @@ interface WorkloadConfig {
   models: string[];
 }
 
-const WORKLOADS: WorkloadConfig[] = [
+export const WORKLOADS: WorkloadConfig[] = [
   {
     key_alias: "orvian-prod",
     soft_budget: 50.0,
@@ -54,6 +54,24 @@ const WORKLOADS: WorkloadConfig[] = [
     models: ["claude-sonnet-4-6"],
   },
 ];
+
+/**
+ * Construye el body JSON exacto para POST /key/generate.
+ * Pure function: testeable sin tocar HTTP.
+ *
+ * Sin `max_budget` por diseño (M3 PoC: solo enforcement soft, no hard stop).
+ */
+export function buildKeyPayload(wl: WorkloadConfig): Record<string, unknown> {
+  return {
+    key_alias: wl.key_alias,
+    soft_budget: wl.soft_budget,
+    budget_duration: wl.budget_duration,
+    tpm_limit: wl.tpm_limit,
+    rpm_limit: wl.rpm_limit,
+    metadata: wl.metadata,
+    models: wl.models,
+  };
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -96,16 +114,7 @@ async function createKey(
       Authorization: `Bearer ${masterKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      key_alias: wl.key_alias,
-      soft_budget: wl.soft_budget,
-      budget_duration: wl.budget_duration,
-      tpm_limit: wl.tpm_limit,
-      rpm_limit: wl.rpm_limit,
-      metadata: wl.metadata,
-      models: wl.models,
-      // No max_budget — soft enforcement only (M3 decision: no hard stop en PoC)
-    }),
+    body: JSON.stringify(buildKeyPayload(wl)),
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) {

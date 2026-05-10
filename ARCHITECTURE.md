@@ -120,7 +120,8 @@ atlax-langfuse-bridge/
 │   ├── mcp-server.ts                 # MCP stdio server [puede ser edge o core]
 │   ├── provision-keys.ts             # Provisiona virtual keys LiteLLM [admin]
 │   ├── smoke-mcp-e2e.ts              # E2E test CI-runnable [CI]
-│   ├── smoke-litellm-langfuse.ts     # E2E LiteLLM gateway [CI]
+│   ├── smoke-litellm-langfuse.ts     # E2E LiteLLM gateway local [CI]
+│   ├── smoke-litellm-pro-e2e.ts      # E2E LiteLLM gateway PRO (litellm.atlax360.ai)
 │   ├── pilot-onboarding.sh           # Onboarding devs piloto (--litellm-mode, --dry-run) [edge]
 │   └── statusline.sh                 # Statusline → detect-tier [edge]
 │

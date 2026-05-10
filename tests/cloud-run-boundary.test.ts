@@ -212,7 +212,153 @@ describe("cloud-run.yaml — F4 custom domain (langfuse.atlax360.ai)", () => {
   });
 });
 
-// ─── 6. backup-story.md is present ───────────────────────────────────────────
+// ─── 6. F5 LiteLLM Gateway (PR #91, 2026-05-10) ─────────────────────────────
+//
+// El servicio `litellm` se desplegó a Cloud Run PRO el 2026-05-10 para el
+// piloto M1 con 13 devs. Si alguien borra el bloque del manifest, este test
+// falla antes de llegar a CI rojo en producción.
+
+describe("cloud-run.yaml — F5 LiteLLM Gateway service", () => {
+  const manifestPath = join(REPO_ROOT, "infra", "cloud-run.yaml");
+  const manifest = readFileSync(manifestPath, "utf-8");
+
+  test("declares the litellm service", () => {
+    expect(manifest).toContain("name: litellm");
+  });
+
+  test("uses Artifact Registry image (Cloud Run rejects ghcr.io)", () => {
+    // Cloud Run solo acepta gcr.io, *.docker.pkg.dev o docker.io.
+    // El mirror vive en europe-west1-docker.pkg.dev/${GCP_PROJECT_ID}/langfuse-images.
+    expect(manifest).toMatch(
+      /image:\s+europe-west1-docker\.pkg\.dev\/.+\/langfuse-images\/litellm:/,
+    );
+    expect(manifest).not.toContain("image: ghcr.io/berriai/litellm");
+  });
+
+  test("ingress is internal-and-cloud-load-balancing (ADR-013)", () => {
+    // El bloque litellm debe restringir el .run.app directo igual que web.
+    // Buscamos el patrón en el bloque litellm específicamente.
+    const litellmStart = manifest.indexOf("name: litellm");
+    const litellmBlock = manifest.slice(litellmStart);
+    expect(litellmBlock).toContain(
+      "run.googleapis.com/ingress: internal-and-cloud-load-balancing",
+    );
+  });
+
+  test("passes --config arg pointing to mounted secret directory", () => {
+    // Cloud Run no soporta subPath en secret volumes. El config.yaml se monta
+    // como directorio en /app/secret/ y se pasa por args.
+    expect(manifest).toContain('args: ["--config", "/app/secret/config.yaml"]');
+  });
+
+  test("mounts litellm-config-yaml secret as directory volume", () => {
+    expect(manifest).toContain("secretName: litellm-config-yaml");
+    // No subPath (Cloud Run no lo soporta para secret volumes)
+    const configBlock = manifest.slice(
+      manifest.indexOf("name: config-yaml"),
+      manifest.indexOf("name: config-yaml") + 800,
+    );
+    expect(configBlock).not.toMatch(/subPath:\s*config\.yaml/);
+  });
+
+  test("LANGFUSE_HOST points to PRO (not local docker network)", () => {
+    // Las trazas del piloto deben ir a langfuse.atlax360.ai, no a langfuse-web:3000.
+    const litellmBlock = manifest.slice(manifest.indexOf("name: litellm"));
+    expect(litellmBlock).toContain("value: https://langfuse.atlax360.ai");
+  });
+
+  test("uses 2Gi memory minimum (1Gi causes OOM at startup)", () => {
+    // Descubierto en el deploy F5: LiteLLM carga dependencias pesadas en
+    // import time y revienta con OOM si memory < 2Gi.
+    const litellmStart = manifest.indexOf("name: litellm");
+    const litellmBlock = manifest.slice(litellmStart);
+    // Busca memory: 2Gi o superior dentro del bloque
+    expect(litellmBlock).toMatch(/memory:\s+2Gi/);
+  });
+
+  test("minScale is 1 (gateway always warm during piloto)", () => {
+    // Con 13 devs ejecutando apps, el cold start de Cloud Run (~5-10s)
+    // arruina la UX en cada idle.
+    const litellmStart = manifest.indexOf("name: litellm");
+    const litellmBlock = manifest.slice(litellmStart);
+    expect(litellmBlock).toMatch(/autoscaling\.knative\.dev\/minScale:\s+"1"/);
+  });
+});
+
+// ─── 7. F5 Coherence: docker/litellm/config.yaml ↔ MODEL_PRICING (I-6) ──────
+
+describe("docker/litellm/config.yaml — coherence with MODEL_PRICING (I-6)", () => {
+  const configPath = join(REPO_ROOT, "docker", "litellm", "config.yaml");
+  const config = readFileSync(configPath, "utf-8");
+
+  test("declared model_name entries are recognized by getPricing()", async () => {
+    const { getPricing, MODEL_PRICING } =
+      await import("../shared/model-pricing");
+    // Extraer model_name: <X> entries
+    const modelNames = [
+      ...config.matchAll(/^\s*-\s*model_name:\s*(\S+)/gm),
+    ].map((m) => m[1]!);
+    expect(modelNames.length).toBeGreaterThan(0);
+
+    for (const name of modelNames) {
+      const pricing = getPricing(name);
+      // Si getPricing cae a default, no hay entrada específica.
+      // Eso es un bug: el gateway acepta un modelo sin precio en MODEL_PRICING.
+      const isDefault = pricing === MODEL_PRICING["default"];
+      expect(isDefault).toBe(false);
+    }
+  });
+
+  test("each model_name has an exact-or-substring entry in MODEL_PRICING", async () => {
+    const { MODEL_PRICING } = await import("../shared/model-pricing");
+    const knownKeys = Object.keys(MODEL_PRICING).filter((k) => k !== "default");
+    const modelNames = [
+      ...config.matchAll(/^\s*-\s*model_name:\s*(\S+)/gm),
+    ].map((m) => m[1]!);
+
+    for (const name of modelNames) {
+      const hasMatch = knownKeys.some((k) => name.includes(k));
+      expect(hasMatch).toBe(true);
+    }
+  });
+});
+
+// ─── 8. F5 smoke E2E para LiteLLM PRO existe ────────────────────────────────
+
+describe("scripts/smoke-litellm-pro-e2e.ts — piloto M1 baseline", () => {
+  const smokePath = join(REPO_ROOT, "scripts", "smoke-litellm-pro-e2e.ts");
+  const smoke = readFileSync(smokePath, "utf-8");
+
+  test("declara los 4 checks E2E del piloto", () => {
+    // Si alguien borra checks del smoke, el baseline antes de PRE/PRO se
+    // degrada silenciosamente.
+    expect(smoke).toContain("health-liveliness");
+    expect(smoke).toContain("chat-completion");
+    expect(smoke).toContain("trace-in-langfuse");
+    expect(smoke).toContain("trace-callback-shape");
+  });
+
+  test("aplica skip-graceful sin credenciales (no rompe CI)", () => {
+    // Patrón estándar Atlax: smoke tests salen exit 0 si no hay creds.
+    expect(smoke).toContain("SKIP");
+    expect(smoke).toMatch(/process\.exit\(0\)/);
+  });
+
+  test("apunta a litellm.atlax360.ai por defecto (PRO endpoint)", () => {
+    expect(smoke).toContain("https://litellm.atlax360.ai");
+    expect(smoke).toContain("https://langfuse.atlax360.ai");
+  });
+
+  test("usa AbortSignal.timeout en todas las llamadas fetch", () => {
+    // Outbound fetches sin timeout son anti-pattern (regla global).
+    const fetchCount = [...smoke.matchAll(/await fetch\(/g)].length;
+    const timeoutCount = [...smoke.matchAll(/AbortSignal\.timeout\(/g)].length;
+    expect(fetchCount).toBeGreaterThan(0);
+    expect(timeoutCount).toBeGreaterThanOrEqual(fetchCount);
+  });
+});
+
+// ─── 9. backup-story.md is present ───────────────────────────────────────────
 
 describe("infra/backup-story.md PRO backup plan", () => {
   const story = readFileSync(
