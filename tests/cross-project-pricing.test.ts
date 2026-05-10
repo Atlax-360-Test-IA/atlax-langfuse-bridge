@@ -142,6 +142,7 @@ describe("cross-project pricing consistency (S17-C)", () => {
 
   // For each model present in BOTH bridge and dashboard, validate agreement
   const MODELS_TO_CHECK = [
+    "claude-opus-4-7",
     "claude-opus-4-6",
     "claude-sonnet-4-6",
     "claude-haiku-4-5",
