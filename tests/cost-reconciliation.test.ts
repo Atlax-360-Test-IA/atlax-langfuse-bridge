@@ -162,3 +162,83 @@ describe("reconcile-traces — cost reconciliation API call shape (anti-regressi
     expect(calls[0]!.search).toContain("description");
   });
 });
+
+// ─── Issue #77 — partial coverage scenario ───────────────────────────────────
+//
+// When the Anthropic Admin API cost_report returns org-wide costs (all 38 devs)
+// but the bridge only observed 1 dev's sessions, the reconciler MUST detect
+// partial coverage via isPartialCoverageScenario and NOT emit cost-divergence-detected.
+//
+// We test the decision chain directly (not the full subprocess) because the
+// reconciler discovery phase scans real ~/.claude/projects JSONLs which makes
+// a full E2E test too slow and environment-dependent. The subprocess anti-regression
+// tests above already validate the process boundary; the pure-function tests in
+// reconcile-pure-functions.test.ts validate the logic. Here we validate the
+// integration of sumCostByModel → familyKey → compareCostByModel →
+// isPartialCoverageScenario using the exact Issue #77 numbers.
+
+describe("cost-comparison decision chain — Issue #77 partial coverage", () => {
+  test("sumCostByModel + familyKey collapse org-wide report to estimated-vs-real rows", async () => {
+    const { sumCostByModel } = await import("../shared/anthropic-admin-client");
+    const { familyKey, compareCostByModel, isPartialCoverageScenario } =
+      await import("../scripts/reconcile-traces");
+
+    // Simulate what the Anthropic API returns for the whole org (38 devs).
+    // Actual Issue #77 numbers: est=$255.18, real=$12085 for sonnet-4-6.
+    const orgReport = {
+      data: [
+        {
+          starting_at: "2026-05-10T00:00:00Z",
+          ending_at: "2026-05-11T00:00:00Z",
+          results: [
+            {
+              currency: "USD" as const,
+              amount: "12085.0455",
+              workspace_id: "ws-org",
+              description: "claude-sonnet-4-6",
+              cost_type: "tokens",
+              model: "claude-sonnet-4-6",
+              service_tier: "standard",
+              token_type: "input",
+            },
+          ],
+        },
+      ],
+      has_more: false,
+      next_page: null,
+    };
+
+    // Bridge estimated cost for 1 dev only
+    const estimatedByModel = new Map([
+      [familyKey("claude-sonnet-4-6"), 255.18],
+    ]);
+
+    const rawReal = sumCostByModel(orgReport);
+    const realByModel = new Map<string, number>();
+    for (const [k, v] of rawReal) {
+      if (k === "__non_token__") continue;
+      const fk = familyKey(k);
+      realByModel.set(fk, (realByModel.get(fk) ?? 0) + v);
+    }
+
+    const rows = compareCostByModel(estimatedByModel, realByModel, 0.05, 0.1);
+
+    // The scenario should be detected as partial coverage (real 47× > estimated)
+    expect(isPartialCoverageScenario(rows, 3)).toBe(true);
+
+    // And NOT as seat-only (real > 0)
+    const { isSeatOnlyScenario } = await import("../scripts/reconcile-traces");
+    expect(isSeatOnlyScenario(rows)).toBe(false);
+
+    // Verify the numbers match Issue #77
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.estimatedUSD).toBeCloseTo(255.18, 2);
+    expect(rows[0]!.realUSD).toBeCloseTo(12085.0455, 2);
+    // divergence should be > threshold — without partial coverage detection it would warn
+    expect(rows[0]!.exceedsThreshold).toBe(true);
+
+    // bridgeCoverageFraction: est / real ≈ 0.021 (2.1% of org traffic)
+    const bridgeCoverage = rows[0]!.estimatedUSD / rows[0]!.realUSD;
+    expect(bridgeCoverage).toBeLessThan(0.05); // bridge saw < 5% of org traffic
+  });
+});

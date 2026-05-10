@@ -194,6 +194,43 @@ export function isSeatOnlyScenario(
   return allReal === 0 && allEst > 0;
 }
 
+// Factor mínimo real/estimado que indica que el bridge cubre solo una fracción
+// del tráfico de la organización. Si real > estimado × este factor, el cost_report
+// está incluyendo tráfico de otros devs/workspaces que el bridge no observa.
+// Configurado vía COST_PARTIAL_COVERAGE_RATIO; default conservador de 3×.
+const _rawCoverageRatio = Number(
+  process.env["COST_PARTIAL_COVERAGE_RATIO"] ?? "3",
+);
+export const COST_PARTIAL_COVERAGE_RATIO =
+  Number.isFinite(_rawCoverageRatio) && _rawCoverageRatio > 1
+    ? _rawCoverageRatio
+    : 3;
+
+/**
+ * Detecta el escenario "cobertura parcial": el cost_report (org-wide) es mucho
+ * mayor que el coste estimado por el bridge (solo este dev). Sucede cuando el
+ * bridge está instalado en una sola máquina pero la organización tiene N devs
+ * usando la API key. La divergencia en este caso es estructural — no indica
+ * pricing incorrecto sino que la comparación es bridge-vs-org.
+ *
+ * Ejemplo documentado en Issue #77: bridge estima $255 (1 dev), cost_report
+ * reporta $12,085 (38 devs). Divergencia del 97% — ruido esperado hasta que
+ * todos los devs tengan el bridge instalado.
+ */
+export function isPartialCoverageScenario(
+  rows: Array<{ estimatedUSD: number; realUSD: number }>,
+  ratio: number = COST_PARTIAL_COVERAGE_RATIO,
+): boolean {
+  if (rows.length === 0) return false;
+  const totalReal = rows.reduce((acc, r) => acc + r.realUSD, 0);
+  const totalEst = rows.reduce((acc, r) => acc + r.estimatedUSD, 0);
+  // Solo aplica cuando ambos lados tienen coste significativo (mix API+seats).
+  // Si estimado es 0, es seat-only (otro escenario). Si real es 0, no hay
+  // tráfico API que comparar.
+  if (totalEst <= 0 || totalReal <= 0) return false;
+  return totalReal > totalEst * ratio;
+}
+
 export function compareCostByModel(
   estimatedByModel: Map<string, number>,
   realByModel: Map<string, number>,
@@ -274,6 +311,27 @@ async function reconcileCostAgainstAnthropic(
       totalEstimatedUSD: Number(totalEst.toFixed(4)),
       models: rows.map((r) => r.model),
       note: "tráfico estimado sin correlato en cost_report — consistente con seats Premium (no facturados vía API)",
+    });
+    return;
+  }
+
+  // Caso especial: cobertura parcial del bridge. El cost_report (org-wide) es
+  // mucho mayor que el estimado local porque el bridge solo está instalado en
+  // esta máquina, no en todas. La divergencia es estructural — no indica
+  // pricing incorrecto. Emitir info con contexto en lugar de warn ruidoso.
+  // Issue #77 — resuelto 2026-05-10.
+  if (isPartialCoverageScenario(rows)) {
+    const totalEst = rows.reduce((acc, r) => acc + r.estimatedUSD, 0);
+    const totalReal = rows.reduce((acc, r) => acc + r.realUSD, 0);
+    const bridgeCoverage =
+      totalReal > 0 ? Number((totalEst / totalReal).toFixed(4)) : null;
+    log("info", "cost-comparison-partial-coverage", {
+      totalEstimatedUSD: Number(totalEst.toFixed(4)),
+      totalRealUSD: Number(totalReal.toFixed(4)),
+      bridgeCoverageFraction: bridgeCoverage,
+      partialCoverageRatio: COST_PARTIAL_COVERAGE_RATIO,
+      models: rows.map((r) => r.model),
+      note: "el cost_report es org-wide; el bridge solo observa las sesiones de esta máquina. Divergencia estructural esperada hasta que todos los devs tengan el bridge instalado.",
     });
     return;
   }
