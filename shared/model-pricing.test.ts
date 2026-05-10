@@ -111,6 +111,11 @@ describe("getPricing", () => {
     expect(p).toEqual(MODEL_PRICING["claude-sonnet-4"]!);
   });
 
+  test("resuelve claude-sonnet-4-5 → sonnet pricing", () => {
+    const p = getPricing("claude-sonnet-4-5");
+    expect(p).toEqual(MODEL_PRICING["claude-sonnet-4"]!);
+  });
+
   test("resuelve claude-haiku-4-5-20251001 → haiku pricing", () => {
     const p = getPricing("claude-haiku-4-5-20251001");
     expect(p).toEqual(MODEL_PRICING["claude-haiku-4-5"]!);
