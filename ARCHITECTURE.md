@@ -6,50 +6,50 @@
 > [`docs/operations/runbook.md`](./docs/operations/runbook.md). Para decisiones
 > formales, ver [`docs/adr/`](./docs/adr/).
 
-**Versión actual**: v0.6.0-wip (v1.0 al cumplir exit criteria piloto)
-**Última actualización**: 2026-05-07
-**Estado**: Production-ready PoC (Langfuse v3 self-hosted local)
+**Versión actual**: v0.6.0-wip (v1.0 al cumplir exit criteria piloto ≥3 devs × 2 semanas)
+**Última actualización**: 2026-05-10
+**Estado**: PRO activo — `https://langfuse.atlax360.ai` (Cloud Run + Cloud SQL + ClickHouse GCE + Memorystore)
 
 ---
 
 ## §1 · Identidad del Proyecto
 
-| Campo                   | Valor                                                                         |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| **Nombre**              | `atlax-langfuse-bridge`                                                       |
-| **Propósito**           | Torre de control FinOps del consumo de Claude Code en Atlax360 (38 devs)      |
-| **Owner**               | `jgcalvo@atlax360.com`                                                        |
-| **Stakeholders**        | 38 developers Atlax360 (usuarios), CTO Atlax360 (sponsor)                     |
-| **Runtime ownership**   | Edge: máquina del dev. Core: Cloud Run en PRO (no aplicado en CI actual)      |
-| **Estado del producto** | Production-ready PoC. Local self-hosted operativo. PRO migration documentada. |
-| **Repositorio**         | `github.com/Atlax-360-Test-IA/atlax-langfuse-bridge`                          |
+| Campo                   | Valor                                                                    |
+| ----------------------- | ------------------------------------------------------------------------ |
+| **Nombre**              | `atlax-langfuse-bridge`                                                  |
+| **Propósito**           | Torre de control FinOps del consumo de Claude Code en Atlax360 (38 devs) |
+| **Owner**               | `jgcalvo@atlax360.com`                                                   |
+| **Stakeholders**        | 38 developers Atlax360 (usuarios), CTO Atlax360 (sponsor)                |
+| **Runtime ownership**   | Edge: máquina del dev. Core: Cloud Run PRO en `europe-west1` (activo)    |
+| **Estado del producto** | PRO activo desde 2026-05-10. Piloto 13 devs Atlax360 en curso.           |
+| **Repositorio**         | `github.com/Atlax-360-Test-IA/atlax-langfuse-bridge`                     |
 
 ### Fases de versión
 
-| Fase   | Versión           | Hito                                                                |
-| ------ | ----------------- | ------------------------------------------------------------------- |
-| Fase 0 | v0.1.0            | Hook Stop + reconciler + tier.json (PoC funcional)                  |
-| Fase 1 | v0.2.x            | Pricing centralizado + LiteLLM gateway opt-in M1-M3                 |
-| Fase 2 | v0.3.x            | Degradation log + tier cache + MCP server + browser extension       |
-| Fase 3 | v0.4.x            | Hardening sprints 1-6 (294 tests, 89% coverage)                     |
-| Fase 4 | v0.5.0 → v0.5.4   | Hardening sprints 7-15 + audit passes (466 tests, 0 deuda residual) |
-| Fase 5 | v0.6.0 (en curso) | Documentación canónica completa                                     |
-| Fase 6 | v1.0.0 (futuro)   | Migración a PRO (Cloud Run + Cloud SQL + Memorystore + ClickHouse)  |
+| Fase   | Versión         | Hito                                                                |
+| ------ | --------------- | ------------------------------------------------------------------- |
+| Fase 0 | v0.1.0          | Hook Stop + reconciler + tier.json (PoC funcional)                  |
+| Fase 1 | v0.2.x          | Pricing centralizado + LiteLLM gateway opt-in M1-M3                 |
+| Fase 2 | v0.3.x          | Degradation log + tier cache + MCP server + browser extension       |
+| Fase 3 | v0.4.x          | Hardening sprints 1-6 (294 tests, 89% coverage)                     |
+| Fase 4 | v0.5.0 → v0.5.4 | Hardening sprints 7-15 + audit passes (466 tests, 0 deuda residual) |
+| Fase 5 | v0.6.0          | Documentación canónica completa + PRO activo (2026-05-10)           |
+| Fase 6 | v1.0.0 (piloto) | Exit criteria: ≥3 devs × 2 semanas en PRO sin incidentes críticos   |
 
 ---
 
 ## §2 · Stack Tecnológico
 
-| Capa                    | Componente                                | Versión / Notas                                | Justificación                                    |
-| ----------------------- | ----------------------------------------- | ---------------------------------------------- | ------------------------------------------------ |
-| **Runtime**             | Bun                                       | ≥1.3 (pinned `1.3.x` en CI)                    | [ADR-001](./docs/adr/ADR-001-bun-cero-deps.md)   |
-| **Lenguaje**            | TypeScript                                | ^5.4.0                                         | Type safety + zero runtime cost via `bun run`    |
-| **Deps prod**           | Cero                                      | —                                              | [ADR-001](./docs/adr/ADR-001-bun-cero-deps.md)   |
-| **Deps dev**            | `bun-types`, `typescript`, `zod`          | —                                              | Solo build/test; nunca en runtime                |
-| **Observabilidad**      | Langfuse v3 self-hosted                   | postgres + clickhouse + redis + minio (docker) | Cero vendor lock; OSS license                    |
-| **Gateway (opt-in)**    | LiteLLM proxy                             | v1.83.7-stable                                 | [ADR-007](./docs/adr/ADR-007-litellm-optin.md)   |
-| **CI**                  | GitHub Actions                            | matrix `ubuntu-latest` + `macos-latest`        | Compatibilidad cross-platform de los 38 devs     |
-| **PRO target (futuro)** | Cloud Run + Cloud SQL + Memorystore + GCS | Documentado en `infra/cloud-run.yaml`          | [ADR-002](./docs/adr/ADR-002-edge-core-split.md) |
+| Capa                 | Componente                                   | Versión / Notas                                                                                | Justificación                                                                                                  |
+| -------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Runtime**          | Bun                                          | ≥1.3 (pinned `1.3.x` en CI)                                                                    | [ADR-001](./docs/adr/ADR-001-bun-cero-deps.md)                                                                 |
+| **Lenguaje**         | TypeScript                                   | ^5.4.0                                                                                         | Type safety + zero runtime cost via `bun run`                                                                  |
+| **Deps prod**        | Cero                                         | —                                                                                              | [ADR-001](./docs/adr/ADR-001-bun-cero-deps.md)                                                                 |
+| **Deps dev**         | `bun-types`, `typescript`, `zod`             | —                                                                                              | Solo build/test; nunca en runtime                                                                              |
+| **Observabilidad**   | Langfuse v3 self-hosted                      | Local: docker-compose. PRO: Cloud Run + GCE + Cloud SQL + Memorystore (`langfuse.atlax360.ai`) | Cero vendor lock; OSS license                                                                                  |
+| **Gateway (opt-in)** | LiteLLM proxy                                | v1.83.7-stable (M1 listo, pendiente activación operacional)                                    | [ADR-007](./docs/adr/ADR-007-litellm-optin.md)                                                                 |
+| **CI**               | GitHub Actions                               | matrix `ubuntu-latest` + `macos-latest`                                                        | Compatibilidad cross-platform de los 38 devs                                                                   |
+| **PRO stack**        | Cloud Run + Cloud SQL + ClickHouse GCE + GCS | `europe-west1`. Activo desde 2026-05-10. `~$145-180/mes`                                       | [ADR-002](./docs/adr/ADR-002-edge-core-split.md) + [ADR-012](./docs/adr/ADR-012-clickhouse-gce-self-hosted.md) |
 
 ---
 
@@ -425,7 +425,7 @@ Ver `infra/backup-story.md` para detalle de backup story (RPO ≤ 1 min).
 
 ## §10 · Testing
 
-**Estado actual**: 818 tests / 1475 expects / 52 ficheros / 0 fallos.
+**Estado actual**: 901 tests / 1610 expects / 55 ficheros / 0 fallos (2026-05-10).
 
 ### Pirámide de tests
 
@@ -490,6 +490,16 @@ bun run check     # typecheck + tests
 | Sprint 15 | #27 | PRO migration readiness — invariante I-13 + Cloud Run scaffolding   |
 | —         | #28 | README post-Sprint 15 docs                                          |
 
+### F1-F5 PRO deployment (2026-05-09/10)
+
+| Fase                | PRs                          | Hito                                                                        |
+| ------------------- | ---------------------------- | --------------------------------------------------------------------------- |
+| F1 Provisioning     | #73, #78, #79, #80, #81, #82 | VPC + Cloud SQL + Memorystore + GCS + GCE ClickHouse + SAs + Secret Manager |
+| F2 Migración datos  | smoke E2E validado           | pg_dump → Cloud SQL + BACKUP TO S3 ClickHouse                               |
+| F3 Deploy Cloud Run | #83                          | web + worker. Fixes: REDIS_PORT 6378, TLS, CLICKHOUSE_USER langfuse         |
+| F4 Custom domain    | Cloud LB + cert managed      | `langfuse.atlax360.ai` activo. ADR-013 (Serverless NEG + allUsers)          |
+| F5 Cutover          | #85, #86, #87, #88, #89      | 13 devs onboardados + backups hardening + drill + ADRs F4/F5                |
+
 ### Audit passes
 
 | PR  | Findings cerrados                                                                               |
@@ -539,10 +549,11 @@ ventana_recuperable = min(cleanupPeriodDays × 24h, WINDOW_HOURS)
 `docs/systemd/` cubre Linux/WSL pero no macOS. Devs Mac configuran cron manual.
 **Mitigación**: documentar plist template en `docs/systemd/launchd/`. **Esfuerzo**: 1h.
 
-### GAP-P02: PRO migration Cloud Run
+### ~~GAP-P02: PRO migration Cloud Run~~ — CERRADO 2026-05-10
 
-Manifest documentado en `infra/cloud-run.yaml` (REFERENCE ONLY, NOT APPLIED IN CI).
-**Status**: PLANNED. **Bloqueante**: decisión de presupuesto Atlax360. Ver [ADR-002](./docs/adr/ADR-002-edge-core-split.md) y `infra/backup-story.md`.
+PRO activo en `https://langfuse.atlax360.ai`. F1-F5 completados (PRs #73-#89).
+Stack: Cloud Run (web + worker) + Cloud SQL Postgres + ClickHouse GCE + Memorystore Redis.
+Ver [ADR-012](./docs/adr/ADR-012-clickhouse-gce-self-hosted.md), [ADR-013](./docs/adr/ADR-013-serverless-neg-allusers-ingress.md), [ADR-014](./docs/adr/ADR-014-cloud-sql-private-only-iap-admin.md), [ADR-015](./docs/adr/ADR-015-backup-policy-pro.md).
 
 ### GAP-P03: Analytics API Anthropic
 
