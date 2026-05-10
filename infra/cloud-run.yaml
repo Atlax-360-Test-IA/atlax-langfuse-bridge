@@ -369,3 +369,108 @@ spec:
   traffic:
     - percent: 100
       latestRevision: true
+---
+# ─── LiteLLM Gateway ──────────────────────────────────────────────────────────
+# ADR-013 patrón: allUsers invoker + ingress=internal-and-cloud-load-balancing
+# La BD litellm vive en el mismo Cloud SQL que Langfuse (IP privada 10.20.96.3).
+# Config.yaml leído de Secret Manager (litellm-config-yaml) montado en /app/config.yaml.
+# No usa ClickHouse ni Redis — solo Postgres (virtual keys + spend tracking).
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: ${GCP_PROJECT_ID}
+  labels:
+    cloud.googleapis.com/location: europe-west1
+  annotations:
+    run.googleapis.com/ingress: internal-and-cloud-load-balancing
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/cpu-throttling: "true"
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "5"
+        run.googleapis.com/network-interfaces: '[{"network":"vpc-langfuse","subnetwork":"subnet-run-egress","tags":["langfuse-egress"]}]'
+        run.googleapis.com/vpc-access-egress: private-ranges-only
+    spec:
+      serviceAccountName: litellm@${GCP_PROJECT_ID}.iam.gserviceaccount.com
+      containerConcurrency: 40
+      timeoutSeconds: 120
+      containers:
+        - image: europe-west1-docker.pkg.dev/${GCP_PROJECT_ID}/langfuse-images/litellm:v1.83.7-stable
+          ports:
+            - name: http1
+              containerPort: 4000
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          startupProbe:
+            httpGet:
+              path: /health/liveliness
+              port: 4000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 18
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: 4000
+            periodSeconds: 60
+            failureThreshold: 3
+            timeoutSeconds: 5
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-database-url
+                  key: latest
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-master-key
+                  key: latest
+            - name: LITELLM_SALT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-salt-key
+                  key: latest
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-anthropic-api-key
+                  key: latest
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-langfuse-public-key
+                  key: latest
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-langfuse-secret-key
+                  key: latest
+            - name: LANGFUSE_HOST
+              value: https://langfuse.atlax360.ai
+            - name: STORE_MODEL_IN_DB
+              value: "true"
+          # Cloud Run no soporta subPath en secretos — montamos como directorio
+          # LiteLLM arranca con: litellm --config /app/secret/config.yaml
+          args: ["--config", "/app/secret/config.yaml"]
+          volumeMounts:
+            - name: config-yaml
+              mountPath: /app/secret
+              readOnly: true
+      volumes:
+        - name: config-yaml
+          secret:
+            secretName: litellm-config-yaml
+            items:
+              - key: latest
+                path: config.yaml
+  traffic:
+    - percent: 100
+      latestRevision: true
