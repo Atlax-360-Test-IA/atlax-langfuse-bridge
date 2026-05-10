@@ -2,10 +2,10 @@
 
 - **Date**: 2026-05-09
 - **Owner**: jgcalvo@atlax360.com
-- **Documento de referencia**: `~/work/kairos/docs/atlax-ai-shared-platform.md` (v0.3, actualizado 2026-05-09)
+- **Documento de referencia**: `~/work/kairos/docs/atlax-ai-shared-platform.md` (v0.3, actualizado 2026-05-09) — _histórico; doc movido a [atlax-360-ai-suite/ai-suite-platform](https://github.com/atlax-360-ai-suite/ai-suite-platform/blob/main/docs/SPEC.md) v0.4 el 2026-05-10_
 - **Estado del bridge**: v0.6.0-wip, 818 tests / 0 fail, PR #72 mergeado, listo para F1 provisioning
 - **Conclusión ejecutiva**: **adoptar con ajustes** — el bridge cumple todos los principios aplicables a su categoría (`edge-tooling`), que el documento v0.3 ya formaliza
-- **Alineado con**: Atlax AI Shared Platform v0.3 (`docs/atlax-ai-shared-platform.md` en kairos)
+- **Alineado con**: Atlax AI Shared Platform v0.3 (`docs/atlax-ai-shared-platform.md` en kairos) — _ver v0.4 en repo dedicado_
 
 ---
 
@@ -201,7 +201,7 @@
 
 ## 5. Ajustes propuestos al documento Kairos
 
-Estos son cambios sugeridos al `atlax-ai-shared-platform.md` para que cubra mejor el ecosistema real:
+Estos son cambios sugeridos al `atlax-ai-shared-platform.md` (v0.3, entonces en Kairos) para que cubriera mejor el ecosistema real. KP-01..KP-05 ya fueron incorporados. El doc canónico vive ahora en [atlax-360-ai-suite/ai-suite-platform](https://github.com/atlax-360-ai-suite/ai-suite-platform/blob/main/docs/SPEC.md) v0.4.
 
 ### KP-01 (alta prioridad) — Sección "Categorías de aplicaciones"
 
@@ -250,7 +250,7 @@ Antes de ejecutar `bash infra/provision-pro.sh` real, propongo el siguiente chec
 
 ### 6.2 Comunicación a Kairos (asíncrono, no bloquea)
 
-5. PR a Kairos `docs/atlax-ai-shared-platform.md` con:
+5. ~~PR a Kairos `docs/atlax-ai-shared-platform.md`~~ — completado. Doc movido a repo dedicado [atlax-360-ai-suite/ai-suite-platform](https://github.com/atlax-360-ai-suite/ai-suite-platform) v0.4 (2026-05-10). Futuras propuestas van como PR a ese repo:
    - Fila §11 actualizada (sección 3 de este reporte) — única pendiente
    - ~~KP-01 Categorías~~ — incorporado en v0.3 §3.1
    - ~~KP-02 Notación §11~~ — incorporado en v0.3
@@ -297,7 +297,7 @@ Motivos:
 
 ## Apéndice A — Referencias cruzadas
 
-- `~/work/kairos/docs/atlax-ai-shared-platform.md` — documento de referencia
+- [atlax-360-ai-suite/ai-suite-platform](https://github.com/atlax-360-ai-suite/ai-suite-platform/blob/main/docs/SPEC.md) — documento de referencia v0.4 (movido de kairos 2026-05-10)
 - `CLAUDE.md` — invariantes I-1..I-14 del bridge
 - `ARCHITECTURE.md` — SDD §1-§14
 - `docs/adr/ADR-002-edge-core-split.md` — invariante I-13 (edge/core)
