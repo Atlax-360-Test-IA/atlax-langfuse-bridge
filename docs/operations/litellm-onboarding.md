@@ -176,8 +176,8 @@ Cursor con proxy).
 | `400 Budget has been exceeded`                      | Spend agotado                | Contactar admin para reset/ampliación                                                      |
 | `Connection refused` / `502` en litellm.atlax360.ai | Gateway Cloud Run caído      | Contactar jgcalvo@atlax360.com; status en `gcloud run services list --region=europe-west1` |
 | Trace no aparece en Langfuse                        | Callback async — esperar 30s | Refrescar; si persiste >2min, ver logs en Cloud Logging del servicio `litellm`             |
-| `user_api_key_alias` null en Langfuse               | LiteLLM v1.83.7 bug          | Upgrade de imagen pendiente; `key_alias` sí llega en metadata de generation                |
+| `user_api_key_alias` null en Langfuse               | Callback async — esperar 30s | Refrescar; si persiste >2min, ver logs en Cloud Logging del servicio `litellm`             |
 
 ---
 
-_Última actualización: pilot-readiness-day0 (2026-05-10) — gateway PRO activo en litellm.atlax360.ai_
+_Última actualización: 2026-05-10 — gateway PRO v1.83.10-stable activo en litellm.atlax360.ai_

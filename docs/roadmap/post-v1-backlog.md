@@ -8,15 +8,11 @@
 
 ## Prioridad ALTA — Unblocking para escala del piloto
 
-### PV1-A1 · Upgrade imagen LiteLLM a versión con `user_api_key_user_id` fix
+### ~~PV1-A1 · Upgrade imagen LiteLLM a versión con `user_api_key_user_id` fix~~ ✅ DONE 2026-05-10
 
-- **Por qué**: `user_api_key_user_id` es null en v1.83.7 — atribución de coste por dev
-  en Langfuse está rota para el gateway. Fix existe upstream.
-- **Impacto**: atribución correcta en Langfuse → KPI "sesiones por dev" funciona
-- **Effort**: S (1d) — cambiar tag de imagen en `docker/docker-compose.yml` + validar test S20-C
-- **Dep**: ninguna
-- **Test a actualizar**: `tests/litellm-m3-virtual-keys.test.ts` — el assert `== null`
-  cambiará a valor real (intencionado, documentado en S20-C)
+- **Completado**: `v1.83.7-stable` → `v1.83.10-stable` (PR #96). `user_api_key_user_id` ya propaga
+  el `user_id` de la virtual key. Test S20-C actualizado: assert `== null` → `typeof === "string"`.
+- **Redeploy Cloud Run**: ejecutar `gcloud run services replace infra/cloud-run.yaml` en `atlax360-ai-langfuse-pro`.
 
 ### PV1-A2 · Distribuir hook a los 13 devs con seat Premium
 

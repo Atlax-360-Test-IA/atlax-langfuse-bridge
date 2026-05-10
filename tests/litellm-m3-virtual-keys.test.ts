@@ -7,8 +7,7 @@
  * S20-B: Budget enforcement — superado el max_budget, el proxy devuelve 400
  *         con type="budget_exceeded" (LiteLLM v1.83.7 usa 400, no 429).
  * S20-C: Atribución en Langfuse — user_api_key_alias llega en metadata de la
- *         generation; user_api_key_user_id es null (bug conocido v1.83.7,
- *         pendiente de upgrade de imagen).
+ *         generation; user_api_key_user_id propaga el user_id de la key (v1.83.10+).
  *
  * Skip graceful si LITELLM_MASTER_KEY o LANGFUSE_PUBLIC_KEY no están configuradas,
  * o si el gateway no es alcanzable.
@@ -360,8 +359,8 @@ async function runS20CAttribution() {
 
   const meta = obsBody.data[0]!.metadata ?? {};
   expect(meta.user_api_key_alias).toBe(KEY_ALIAS_ATTR);
-  // user_api_key_user_id es null/undefined en v1.83.7 (bug conocido — fixed en versiones posteriores)
-  expect(meta.user_api_key_user_id == null).toBe(true);
+  // v1.83.10+: user_api_key_user_id propaga el user_id configurado en la key (string no nulo)
+  expect(typeof meta.user_api_key_user_id).toBe("string");
 }
 
 describe("S20-C · atribución de cost en Langfuse via virtual key", () => {
