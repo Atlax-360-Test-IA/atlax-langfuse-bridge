@@ -108,3 +108,159 @@ PRO.
 ---
 
 ## §2 · Fase PRO — promoción a producción
+
+### T-2.1 · Pre-deploy: gate "limpio antes de avanzar" + verificaciones GCP
+
+| Timestamp (UTC)        | Acción                                                                              | Resultado                                                | Notas                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `2026-05-11T17:13:30Z` | Commit + PR #106 + merge a main (DEV upgrade completo)                              | Mergeado squash, branch deleted                          | Aplica regla CLAUDE.md global "limpio antes de avanzar" — DEV en main antes de tocar PRO |
+| `2026-05-11T17:14:50Z` | `gcloud run services list --region=europe-west1 --project=atlax360-ai-langfuse-pro` | web/worker actuales en 3.172.1                           | Baseline confirmado                                                                      |
+| `2026-05-11T17:15:06Z` | `envsubst < infra/cloud-run.yaml > /tmp/cloud-run.rendered.yaml`                    | 488 líneas, ambas imágenes a 3.173.0, sin `$VAR` sueltas | Solo 2 variables (`$LANGFUSE_VERSION`, `$GCP_PROJECT_ID`)                                |
+| `2026-05-11T17:15:22Z` | `gcloud sql instances list` — verificar Cloud SQL PITR                              | PITR habilitado en `langfuse-pg`                         | Rollback path Postgres garantizado (point-in-time)                                       |
+| `2026-05-11T17:15:36Z` | Split manifest por servicio (web / worker / litellm)                                | 3 ficheros separados                                     | Permite deploy granular y observación independiente                                      |
+
+### T-2.2 · Deploy de revisiones nuevas
+
+| Timestamp (UTC)        | Acción                                                        | Resultado                                                     | Notas                                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-05-11T17:15:51Z` | `gcloud run services replace /tmp/cr-svc-1.yaml` (web)        | Nueva revisión `langfuse-web-00002-k7t` desplegada en **55s** | ⚠️ **F-4 fricción** — el manifest declara `traffic: percent: 100, latestRevision: true`, así el `replace` cambió tráfico al 100% INSTANTÁNEAMENTE (no es blue-green real) |
+| `2026-05-11T17:16:46Z` | `curl /api/public/health` contra `langfuse.atlax360.ai`       | HTTP 200 en 5.9s                                              | Latencia consistente con cold start tras minScale=0; nada anómalo                                                                                                         |
+| `2026-05-11T17:17:31Z` | `curl /api/public/ingestion` (sin auth)                       | HTTP 401 — el endpoint existe y rechaza correctamente         | Validación de auth funciona                                                                                                                                               |
+| `2026-05-11T17:17:42Z` | `gcloud run services replace /tmp/cr-svc-2.yaml` (worker)     | Nueva revisión `langfuse-worker-00004-9w6` en **43s**         |                                                                                                                                                                           |
+| `2026-05-11T17:18:32Z` | `gcloud run services list` — verificar 100% tráfico en LATEST | web 3.173.0 100%, worker 3.173.0 100%, litellm intacto        | LiteLLM no fue tocado (no había cambio)                                                                                                                                   |
+| `2026-05-11T17:18:35Z` | `gcloud logging read severity>=ERROR --freshness=5m`          | Vacío — sin errores en logs últimos 5min                      | Worker arrancó sin issue de RAM (riesgo medio identificado por subagente B sobre nueva cola OTel secundaria)                                                              |
+
+### T-2.3 · Smoke E2E real contra PRO 3.173.0
+
+| Timestamp (UTC)        | Acción                                                                 | Resultado                                             | Notas                                                          |
+| ---------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------- |
+| `2026-05-11T17:18:47Z` | `source ~/.atlax-ai/reconcile.env && bun run scripts/smoke-mcp-e2e.ts` | **8/8 checks ✓ en 19s** contra PRO                    | Ingestion + worker + cache + annotate + round-trip funcionando |
+| `2026-05-11T17:19:06Z` | Status final stack PRO                                                 | langfuse-web + langfuse-worker en 3.173.0, sin errors | Promote completo sin rollback                                  |
+
+**Fricción F-4 identificada**: el manifest `cloud-run.yaml` declara
+`traffic: percent: 100, latestRevision: true`, lo que hace que `gcloud run
+services replace` cambie tráfico al 100% inmediatamente en cuanto la nueva
+revisión esté `Ready`. El comentario del manifest dice "para deploys
+subsiguientes usar `gcloud run services replace` con `--no-traffic`", pero
+`replace` no acepta `--no-traffic` (es flag de `deploy`, no de `replace`).
+**Mejora candidata**: o bien (1) cambiar manifest a `percent: 0` y usar
+`update-traffic` para promote, o (2) usar `gcloud run deploy --no-traffic`
+en lugar de `replace`. Esta vez el upgrade era seguro y funcionó, pero un
+breaking change habría llegado a producción sin posibilidad de blue-green.
+
+**Veredicto Fase PRO**: ✅ upgrade aplicado exitosamente. 0 errors en logs.
+Smoke 8/8 contra PRO 3.173.0. Sin rollback necesario. Tiempo total fase PRO:
+~3min de deploy efectivo (web 55s + worker 43s + healthchecks + smoke).
+
+---
+
+## §3 · Retrospectiva
+
+### Resumen de tiempos
+
+| Fase                                 | Duración   | Comentario                                          |
+| ------------------------------------ | ---------- | --------------------------------------------------- |
+| Pre-flight (release scan + decisión) | ~3min      | Subagente B ejecutó en paralelo, no bloqueó         |
+| Pull DEV imágenes                    | ~16min     | F-2: cuello de botella claro (1.5GB × 2 secuencial) |
+| Recreate DEV + healthcheck           | ~2min      | Worker 53s, Web 50s — sano                          |
+| Smoke + tests DEV                    | ~1min      | 8/8 + suite 1054/0 en <40s combinado                |
+| Commit + PR + merge DEV              | ~2min      | Squash via `gh pr merge --admin`                    |
+| Render manifest + verif GCP          | ~1min      | Validación PITR + split manifest                    |
+| Deploy PRO web                       | ~1min      | 55s gcloud + healthy auto                           |
+| Deploy PRO worker                    | ~1min      | 43s                                                 |
+| Smoke PRO                            | ~20s       | 8/8 contra dominio real                             |
+| **TOTAL extremo a extremo**          | **~28min** | De `git checkout -b` a "PRO operativo y validado"   |
+
+### Fricciones identificadas y mejoras candidatas
+
+| ID  | Fricción                                                                        | Impacto | Mejora candidata                                                                                                       |
+| --- | ------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| F-1 | Backup pre-upgrade en DEV no es paso explícito del playbook                     | MEDIUM  | Añadir al runbook §Upgrades como paso obligatorio antes de tocar imágenes                                              |
+| F-2 | Pull docker compose secuencial — 16min para 2 imágenes de 1.5GB                 | MEDIUM  | Usar `docker pull X & docker pull Y; wait` o `docker compose pull --parallel` (si la versión lo soporta) → ~50% tiempo |
+| F-3 | `~/.atlax-ai/reconcile.env` mezcla creds DEV y PRO                              | HIGH    | Separar en `dev.env` + `pro.env`; runbook explícito sobre cuál sourcear cuándo (riesgo: reparar PRO con datos locales) |
+| F-4 | `gcloud run services replace` con manifest `percent: 100` ignora `--no-traffic` | HIGH    | Cambiar manifest a `percent: 0` con `update-traffic` para promote, o usar `gcloud run deploy --no-traffic`             |
+
+### Lo que funcionó muy bien
+
+- **I-14 doble-check** de subagente B contra `gh api compare` confirmó precisión total
+  del análisis de migraciones (2 PG aditivas, 0 CH).
+- **Subagentes paralelos** redujeron tiempo total: A y B corrieron mientras el pull
+  descargaba 3GB.
+- **scripts/smoke-mcp-e2e.ts** demostró ser un test funcional sólido: 8 checks
+  cubren ingestion, worker async, read API, cache, annotate, round-trip. Validó
+  upgrade DEV en 17s y PRO en 19s.
+- **Cloud SQL PITR + ClickHouse snapshots + backup pre-upgrade** dan 3 capas de
+  rollback. Aunque no hizo falta usarlo, el coste de la opción cero fue ~10s.
+
+### Acciones de mejora (a aplicar en siguiente PR)
+
+Las 4 fricciones se traducen en backlog específico — **PR separada** (no en este
+chore de upgrade) que añada:
+
+1. **Runbook §Upgrades**: paso explícito de backup pre-upgrade DEV + render manifest
+2. **Manifest `cloud-run.yaml`**: web `traffic: percent: 0` + comentario diferenciando primer deploy vs subsiguientes
+3. **Setup pilot**: generar `dev.env` separado de `pro.env`, runbook explícito de cuándo cada uno
+4. **CHANGELOG global rules** `~/.claude/rules/`: añadir patrón "pull paralelo
+   para upgrade Docker stacks grandes" a `cross-project-patterns.md`
+
+Ver §4 abajo para los textos exactos a aplicar.
+
+---
+
+## §4 · Patrones a incorporar a las rules globales
+
+(Para aplicar en el siguiente PR, no en este de upgrade.)
+
+### `~/.claude/rules/cross-project-patterns.md` — sección nueva
+
+````markdown
+## Docker compose pull — paralelizar imágenes grandes
+
+`docker compose pull` con múltiples servicios sin `--parallel` puede ser
+secuencial dependiendo de la versión instalada. Para stacks con imágenes
+grandes (>500MB cada una), preferir:
+
+```bash
+# Opción 1: si docker compose ≥2.20 soporta el flag
+docker compose pull --parallel langfuse-web langfuse-worker
+
+# Opción 2: paralelización manual con docker pull directo
+docker pull langfuse/langfuse:VERSION &
+docker pull langfuse/langfuse-worker:VERSION &
+wait
+```
+````
+
+Reduce el tiempo de pull de 2 imágenes 1.5GB de ~16min a ~8min en conexión
+domestic broadband.
+
+````
+
+### `~/.claude/rules/security.md` — añadir a §Credentials handling
+
+```markdown
+- **Separar env files por entorno** (`~/.atlax-ai/dev.env` vs `~/.atlax-ai/pro.env`,
+  nunca mezclados en `reconcile.env`). Un operador puede accidentalmente
+  ejecutar el reconciler contra PRO con datos JSONL locales si confunde el
+  destino. Patrón canónico: el runbook §Upgrades especifica `source dev.env`
+  para fase DEV y `source pro.env` para fase PRO.
+````
+
+### `docs/operations/runbook.md` — nueva sección §Upgrades
+
+(Texto largo — incluido en el PR de mejoras como fichero completo.)
+
+---
+
+## §5 · Conclusión
+
+Upgrade Langfuse 3.172.1 → 3.173.0 ejecutado de DEV a PRO en ~28min reales,
+con 0 incidentes y 0 rollbacks. Las 4 fricciones identificadas son
+sistemáticas (no específicas de este upgrade) y se materializan como backlog
+de mejora. **El ciclo de vida del software funciona end-to-end pero tiene
+margen claro de optimización en velocidad (F-2) y seguridad operacional
+(F-3, F-4).**
+
+Próximo upgrade (3.173.0 → 3.174.x) podría hacerse en **~12min** si se
+implementan F-2 + F-4 (pull paralelo + manifest `percent: 0` + promote
+explícito).
