@@ -214,12 +214,23 @@ spec:
             - name: OTEL_SDK_DISABLED
               value: "true"
   traffic:
-    # IMPORTANTE: para deploys subsiguientes usar `gcloud run services replace`
-    # con `--no-traffic`, luego promover con `gcloud run services update-traffic`
-    # tras smoke test. El `percent: 100, latestRevision: true` del manifest
-    # ÚNICAMENTE aplica al primer deploy del servicio (cuando aún no hay
-    # revisión previa). Si se reaplica sin `--no-traffic` sobre un servicio
-    # existente, el manifest hace un cutover instantáneo del 100% del tráfico.
+    # IMPORTANTE — patrón de deploy para langfuse-web (servicio user-facing):
+    # `gcloud run services replace` ignora flags como --no-traffic (es flag
+    # de `gcloud run deploy`, no de `replace`) y aplica el manifest tal cual.
+    # Esto significa que `replace` con `percent: 100, latestRevision: true`
+    # hace cutover INSTANTÁNEO al 100% en cuanto la nueva revisión esté Ready.
+    #
+    # Para blue-green real, usar `gcloud run deploy` con `--no-traffic`:
+    #   ENV=pro envsubst < cloud-run.yaml | yq '.spec.template' \
+    #     > /tmp/web-template.yaml
+    #   gcloud run deploy langfuse-web --image=langfuse/langfuse:$VER \
+    #     --region=europe-west1 --no-traffic ...
+    #   # smoke contra revision URL con --tag
+    #   gcloud run services update-traffic langfuse-web \
+    #     --to-revisions=LATEST=100 --region=europe-west1
+    #
+    # El script `scripts/upgrade-langfuse.sh` mecaniza este flujo. Ver también
+    # `docs/operations/runbook.md §Upgrades`.
     - percent: 100
       latestRevision: true
 
