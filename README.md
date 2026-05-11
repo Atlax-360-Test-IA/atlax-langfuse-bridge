@@ -9,11 +9,11 @@ programáticos, y un MCP server para consultas agénticas.
 
 > 📖 **Arquitectura completa**: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 > 🛠️ **Operación día-a-día**: [`docs/operations/runbook.md`](./docs/operations/runbook.md)
-> 📋 **Decisiones formales**: [`docs/adr/`](./docs/adr/) (ADR-001..ADR-011)
+> 📋 **Decisiones formales**: [`docs/adr/`](./docs/adr/) (ADR-001..ADR-017)
 > 📜 **Changelog**: [`CHANGELOG.md`](./CHANGELOG.md)
 > 📊 **Dashboard Langfuse**: [`docs/operations/langfuse-dashboard-guide.md`](./docs/operations/langfuse-dashboard-guide.md)
 
-**v1.0.0 · 1053 tests / 1923 expects / 0 fallos**
+**v1.0.1 · 1059 tests / 1933 expects / 0 fallos**
 
 ---
 
@@ -248,7 +248,7 @@ Trazas con prefijo `claude-web-*` y tag `entrypoint:claude-ai`.
 ## Comandos esenciales
 
 ```bash
-# Tests + typecheck (818 tests / 0 fallos)
+# Tests + typecheck
 bun run check
 
 # Validar integridad contra Langfuse
@@ -293,12 +293,12 @@ Más comandos en [`docs/operations/runbook.md`](./docs/operations/runbook.md).
 hooks/                   # Hook Stop síncrono (langfuse-sync.ts)
 scripts/                 # Reconciler, MCP, validate, detect-tier, pilot-onboarding
 shared/                  # Biblioteca pura — pricing, aggregate, drift, degradation
-tests/                   # 818 tests / 1475 expects (52 ficheros)
+tests/                   # 1059 tests / 1933 expects (64 ficheros)
 browser-extension/       # MV3 — captura claude.ai y Desktop App
 docker/                  # Langfuse v3 self-hosted + LiteLLM gateway (opt-in)
 infra/                   # Cloud Run target + backup story
 docs/
-  adr/                   # ADR-001..ADR-011 (inmutables)
+  adr/                   # ADR-001..ADR-017 (inmutables)
   operations/            # runbook, litellm-onboarding, pilot-kpis, dashboard-guide
   rfcs/                  # RFC-001 (Anthropic cost_report), RFC-002 (HTTP bridge)
   spikes/                # S23-A (bridge HTTP viability)
@@ -333,5 +333,5 @@ Este repo sigue las convenciones canónicas del ecosistema Atlax360
 - **Branches**: nunca commitear a `main`. Rama `<type>/<descripción>`.
 - **Versionado**: semver (MAJOR breaking · MINOR feature · PATCH fix/docs).
 - **ADRs**: inmutables. Cambio = nuevo ADR con `Supersedes: ADR-NNN`.
-- **Tests**: cada PR pasa `bun run check` (typecheck + 818 tests).
+- **Tests**: cada PR pasa `bun run check` (typecheck + suite completa de tests).
 - **Invariantes**: respetar I-1..I-14 en [`CLAUDE.md`](./CLAUDE.md).

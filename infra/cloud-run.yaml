@@ -121,6 +121,7 @@ spec:
               value: "true"
             # Memorystore usa CA propia de Google — no en bundle Node.js.
             # Red privada VPC: cifrado activo, verificación de cert desactivada.
+            # Decisión formal y trade-off documentado en ADR-017.
             - name: NODE_TLS_REJECT_UNAUTHORIZED
               value: "0"
             - name: REDIS_AUTH
@@ -213,8 +214,12 @@ spec:
             - name: OTEL_SDK_DISABLED
               value: "true"
   traffic:
-    # Deploy con --no-traffic (LATEST=0%); promoción manual con update-traffic.
-    # En el primer deploy el manifest declara LATEST=100 para arranque.
+    # IMPORTANTE: para deploys subsiguientes usar `gcloud run services replace`
+    # con `--no-traffic`, luego promover con `gcloud run services update-traffic`
+    # tras smoke test. El `percent: 100, latestRevision: true` del manifest
+    # ÚNICAMENTE aplica al primer deploy del servicio (cuando aún no hay
+    # revisión previa). Si se reaplica sin `--no-traffic` sobre un servicio
+    # existente, el manifest hace un cutover instantáneo del 100% del tráfico.
     - percent: 100
       latestRevision: true
 

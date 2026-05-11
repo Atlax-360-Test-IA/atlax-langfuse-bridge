@@ -155,7 +155,7 @@ describe("reconcile-traces — dry run scan (I-5)", () => {
     );
     // Either detected the session or logged scan-completed (no sessions found in temp HOME)
     const scanCompleted = lines.find((l) => l.msg === "scan-completed");
-    expect(scanCompleted ?? driftLine).toBeDefined();
+    expect(scanCompleted ?? driftLine).toBeTruthy();
   });
 
   test("DRY_RUN=1 exits 0 when MISSING drift detected (no repair attempted)", async () => {

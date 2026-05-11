@@ -98,6 +98,21 @@ describe("processStopEvent — error paths (exit 0)", () => {
     await expect(processStopEvent(raw)).rejects.toThrow("exit:0");
   });
 
+  test("session_id con caracteres inválidos (path traversal) → emite degradation y sale con exit 0 (I-15)", async () => {
+    const raw = makeStopEvent({ session_id: "../../../etc/passwd" });
+    await expect(processStopEvent(raw)).rejects.toThrow("exit:0");
+  });
+
+  test("session_id excesivamente largo (>128 chars) → emite degradation y sale con exit 0 (I-15)", async () => {
+    const raw = makeStopEvent({ session_id: "a".repeat(129) });
+    await expect(processStopEvent(raw)).rejects.toThrow("exit:0");
+  });
+
+  test("session_id con caracteres unicode/control → emite degradation y sale con exit 0 (I-15)", async () => {
+    const raw = makeStopEvent({ session_id: "abc\x00\x1f<script>" });
+    await expect(processStopEvent(raw)).rejects.toThrow("exit:0");
+  });
+
   test("transcript_path escapa el safe root → emite degradation y sale con exit 0", async () => {
     const escapingPath = path.join(os.tmpdir(), "evil.jsonl");
     const raw = makeStopEvent({ transcript_path: escapingPath });

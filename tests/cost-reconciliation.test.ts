@@ -132,7 +132,7 @@ describe("reconcile-traces — cost reconciliation API call shape (anti-regressi
     }
     // If 0 cost_report calls (no JSONLs in window), the test passes trivially —
     // the bug only manifests when cost reconciliation is exercised.
-    expect(proc.exitCode).toBeDefined();
+    expect(typeof proc.exitCode).toBe("number");
   });
 
   test("ANTHROPIC_ADMIN_API_BASE override is respected (proves test setup correctness)", async () => {

@@ -393,8 +393,8 @@ describe("runReconcile — ANTHROPIC_ADMIN_API_KEY activa reconcileCostAgainstAn
     const costReportUrl = capturedUrls.find((u) =>
       u.includes("/v1/organizations/cost_report"),
     );
-    expect(costReportUrl).toBeDefined();
-    expect(decodeURIComponent(costReportUrl!)).toContain(
+    expect(costReportUrl).toBeTruthy();
+    expect(decodeURIComponent(costReportUrl as string)).toContain(
       "group_by[]=description",
     );
   });

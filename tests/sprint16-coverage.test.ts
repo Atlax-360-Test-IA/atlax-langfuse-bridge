@@ -462,7 +462,7 @@ describe("reconcile-traces — main() error paths", () => {
       const completed = lines.find(
         (l: { msg?: string }) => l.msg === "scan-completed",
       );
-      expect(completed).toBeDefined();
+      expect(completed).toBeTruthy();
       // Session was excluded so drift should be 0
       expect((completed as { drift?: number }).drift).toBe(0);
     } finally {
@@ -507,7 +507,7 @@ describe("reconcile-traces — main() error paths", () => {
       const skipLog = lines.find(
         (l: { msg?: string }) => l.msg === "skipping-invalid-sid",
       );
-      expect(skipLog).toBeDefined();
+      expect(skipLog).toBeTruthy();
     } finally {
       rmSync(homeDir, { recursive: true, force: true });
     }

@@ -207,10 +207,7 @@ describe("mcp-server — OOM guard: línea > MAX_LINE_BYTES cierra la conexión"
       stdout.includes('"code":-32700') ||
       stdout.includes('"code": -32700');
 
-    // At minimum the server must not hang (we get here = timeout killed it or it exited)
-    // and it should have written something to signal the error
-    expect(typeof outputCombined).toBe("string");
-    // If stdout has JSON, it must contain an error response
+    // Si stdout contiene JSON-RPC, el error code debe ser -32700.
     if (stdout.trim().length > 0) {
       try {
         const parsed = JSON.parse(stdout.trim().split("\n")[0]!) as {
@@ -220,12 +217,12 @@ describe("mcp-server — OOM guard: línea > MAX_LINE_BYTES cierra la conexión"
           expect(parsed.error.code).toBe(-32700);
         }
       } catch {
-        // Non-JSON stdout is also acceptable (server may close before writing)
+        // Non-JSON stdout es aceptable (server cerró antes de flushear).
       }
     }
-    // The main assertion: server didn't crash silently without any output at all
-    // (hasLineError or the connection was cleanly closed)
-    expect(hasLineError || outputCombined.length >= 0).toBe(true);
+    // Aserción real: el server debe haber señalizado el error
+    // (línea-too-long, exceeded, o código JSON-RPC -32700).
+    expect(hasLineError).toBe(true);
   });
 });
 

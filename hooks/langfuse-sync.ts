@@ -18,7 +18,7 @@ import { getPricing } from "../shared/model-pricing";
 import { aggregateLines } from "../shared/aggregate";
 import { emitDegradation } from "../shared/degradation";
 import { isSafeHost } from "../shared/langfuse-client";
-import { safeFilePath } from "../shared/validation";
+import { SAFE_SID_RE, safeFilePath } from "../shared/validation";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -235,20 +235,30 @@ export async function sendToLangfuse(batch: unknown[]): Promise<void> {
     "base64",
   );
 
-  const res = await fetch(`${host}/api/public/ingestion`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Basic ${credentials}`,
-    },
-    body: JSON.stringify({ batch }),
-    signal: AbortSignal.timeout(10_000),
-  });
+  // Try/catch explícito para distinguir TimeoutError (DOMException) y network
+  // errors del HTTP 4xx/5xx. main().catch() final tiene el safety net I-1 con
+  // exit 0, pero degradation estructurada aquí mejora telemetría post-mortem.
+  let res: Response;
+  try {
+    res = await fetch(`${host}/api/public/ingestion`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${credentials}`,
+      },
+      body: JSON.stringify({ batch }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    emitDegradation("sendToLangfuse:fetch-failed", err);
+    return;
+  }
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    process.stderr.write(
-      `[langfuse-sync] Error Langfuse ${res.status}: ${body.slice(0, 200)}\n`,
+    emitDegradation(
+      "sendToLangfuse:http-error",
+      new Error(`Langfuse ${res.status}: ${body.slice(0, 200)}`),
     );
   }
 }
@@ -284,6 +294,19 @@ export async function processStopEvent(raw: string): Promise<void> {
 
   const { session_id, transcript_path, cwd, _invokedByReconciler } = event;
   if (!transcript_path || !session_id) process.exit(0);
+
+  // I-15: validar IDs antes de propagar a sistemas externos. session_id se
+  // convierte en `traceId = cc-${session_id}` y va a Langfuse — un valor
+  // pathológicamente largo o con caracteres raros corrompe queries downstream.
+  if (!SAFE_SID_RE.test(session_id)) {
+    emitDegradation(
+      "main:invalid-session-id",
+      new Error(
+        `session_id no cumple SAFE_SID_RE (len=${session_id.length}): "${session_id.slice(0, 32)}..."`,
+      ),
+    );
+    process.exit(0);
+  }
 
   // Confine transcript_path to ~/.claude/projects/ — defense against a
   // compromised parent process injecting an arbitrary path via stdin.

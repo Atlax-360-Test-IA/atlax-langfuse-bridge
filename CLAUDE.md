@@ -5,7 +5,7 @@ global `~/.claude/CLAUDE.md`.
 
 > 📖 **Arquitectura completa**: ver [`ARCHITECTURE.md`](./ARCHITECTURE.md) — SDD §1-§14.
 > 🛠️ **Operación día-a-día**: ver [`docs/operations/runbook.md`](./docs/operations/runbook.md).
-> 📋 **Decisiones formales**: ver [`docs/adr/`](./docs/adr/) (ADR-001..ADR-016).
+> 📋 **Decisiones formales**: ver [`docs/adr/`](./docs/adr/) (ADR-001..ADR-017).
 > 📜 **Cambios**: ver [`CHANGELOG.md`](./CHANGELOG.md).
 
 Este archivo solo contiene **instrucciones operativas para Claude Code en
@@ -207,6 +207,39 @@ Sin esa verificación, la regresión hubiera llegado a producción.
 **Scope**: `all` (aplica a todos los proyectos Atlax con desarrollo centaur)
 
 Ver [ADR-011](./docs/adr/ADR-011-parallel-subagent-limits.md) para decisión formal y contexto completo.
+
+### I-15 · Validar IDs antes de propagar a sistemas externos
+
+Cualquier ID derivado de input externo (stdin, IPC, HTTP body) DEBE pasar por
+`SAFE_SID_RE` (`shared/validation.ts`) antes de usarse en:
+
+- Construcción de `traceId`/`observationId` para Langfuse
+- Tags, metadata o cualquier campo enviado a sistemas downstream
+- Paths del filesystem (combinar con `safeFilePath()`)
+- Logs estructurados o degradation records
+
+La sola validación `typeof === "string"` NO basta: un valor de 1MB o con
+caracteres de control pasa el typeof check pero corrompe queries en Langfuse,
+infla almacenamiento en ClickHouse, o introduce vectores de XSS si el campo
+acaba renderizado en el dashboard.
+
+**Patrón canónico** (aplicado en `hooks/langfuse-sync.ts` para `session_id`):
+
+```typescript
+import { SAFE_SID_RE } from "../shared/validation";
+
+if (typeof id !== "string" || !SAFE_SID_RE.test(id)) {
+  emitDegradation("source:invalid-id", new Error(`id no cumple SAFE_SID_RE`));
+  process.exit(0); // I-1: nunca bloquear el hook
+}
+// Solo aquí es seguro usar `id` en strings que viajan a sistemas externos.
+```
+
+**Verificación**: `tests/langfuse-sync-main.test.ts` valida 3 casos (path traversal,
+length>128, control chars). El SDD enforcement test (`tests/sdd-invariants.test.ts`)
+exige que I-15 aparezca en `ARCHITECTURE.md` y Apéndice A.
+
+**Scope**: `all` (aplica a todo proyecto Atlax que reciba IDs por input externo).
 
 ## Comandos de operación
 

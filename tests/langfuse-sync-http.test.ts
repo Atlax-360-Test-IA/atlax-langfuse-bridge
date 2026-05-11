@@ -131,7 +131,7 @@ describe("langfuse-sync → Bun.serve mock HTTP", () => {
     const body = captured!.body as { batch: Array<Record<string, unknown>> };
     expect(Array.isArray(body.batch)).toBe(true);
     const trace = body.batch.find((e) => e["type"] === "trace-create");
-    expect(trace).toBeDefined();
+    expect(trace).toBeTruthy();
   });
 
   test("trace-create body has correct traceId and sessionId", async () => {

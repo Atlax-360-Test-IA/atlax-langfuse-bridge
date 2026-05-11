@@ -10,7 +10,11 @@
 import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
 import { saveEnv, restoreEnv } from "./helpers/env";
 
-const ENV_KEYS = ["LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"];
+const ENV_KEYS = [
+  "LANGFUSE_HOST",
+  "LANGFUSE_PUBLIC_KEY",
+  "LANGFUSE_SECRET_KEY",
+];
 const SAVED = saveEnv(ENV_KEYS);
 
 const SAMPLE_BATCH = [
@@ -57,7 +61,10 @@ describe("sendToLangfuse — HTTP success", () => {
     ];
     expect(auth).toMatch(/^Basic /);
     // Decode and verify credentials
-    const decoded = Buffer.from(auth!.replace("Basic ", ""), "base64").toString();
+    const decoded = Buffer.from(
+      auth!.replace("Basic ", ""),
+      "base64",
+    ).toString();
     expect(decoded).toBe("pk-test:sk-test");
   });
 
@@ -85,9 +92,9 @@ describe("sendToLangfuse — HTTP success", () => {
       return Promise.resolve(new Response("{}", { status: 207 }));
     });
 
-    const { sendToLangfuse } = await import(
+    const { sendToLangfuse } = (await import(
       `../hooks/langfuse-sync?_t=${Date.now()}`
-    ) as typeof import("../hooks/langfuse-sync");
+    )) as typeof import("../hooks/langfuse-sync");
     await sendToLangfuse(SAMPLE_BATCH);
 
     if (captured.length > 0) {
@@ -233,20 +240,49 @@ describe("sendToLangfuse — fetch rejection (network error)", () => {
     restoreEnv(SAVED);
   });
 
-  test("propagates fetch rejection (hook's main() catches it and exits 0)", async () => {
+  test("network rejection se captura y emite degradation (no propaga)", async () => {
     fetchSpy.mockImplementation(() =>
       Promise.reject(new Error("ECONNREFUSED")),
     );
-    const { sendToLangfuse } = await import("../hooks/langfuse-sync");
-    // sendToLangfuse itself does not catch — main() wraps it in try/catch
-    await expect(sendToLangfuse(SAMPLE_BATCH)).rejects.toThrow("ECONNREFUSED");
-  });
-
-  test("AbortError (timeout) propagates to main() catch", async () => {
-    fetchSpy.mockImplementation(() =>
-      Promise.reject(new DOMException("The operation was aborted", "AbortError")),
+    const stderrSpy = spyOn(process.stderr, "write").mockImplementation(
+      () => true,
     );
     const { sendToLangfuse } = await import("../hooks/langfuse-sync");
-    await expect(sendToLangfuse(SAMPLE_BATCH)).rejects.toBeDefined();
+
+    // sendToLangfuse ahora captura el error en try/catch y emite degradation
+    // estructurada. main() ya no necesita ser el único safety net (I-1 OK).
+    await expect(sendToLangfuse(SAMPLE_BATCH)).resolves.toBeUndefined();
+
+    const calls = stderrSpy.mock.calls.map((c) => String(c[0]));
+    const degradation = calls.find((c) =>
+      c.includes("sendToLangfuse:fetch-failed"),
+    );
+    expect(degradation).toBeTruthy();
+    expect(degradation).toContain("ECONNREFUSED");
+
+    stderrSpy.mockRestore();
+  });
+
+  test("AbortError (timeout) se captura y emite degradation (no propaga)", async () => {
+    fetchSpy.mockImplementation(() =>
+      Promise.reject(
+        new DOMException("The operation was aborted", "AbortError"),
+      ),
+    );
+    const stderrSpy = spyOn(process.stderr, "write").mockImplementation(
+      () => true,
+    );
+    const { sendToLangfuse } = await import("../hooks/langfuse-sync");
+
+    await expect(sendToLangfuse(SAMPLE_BATCH)).resolves.toBeUndefined();
+
+    const calls = stderrSpy.mock.calls.map((c) => String(c[0]));
+    const degradation = calls.find((c) =>
+      c.includes("sendToLangfuse:fetch-failed"),
+    );
+    expect(degradation).toBeTruthy();
+    expect(degradation).toContain("The operation was aborted");
+
+    stderrSpy.mockRestore();
   });
 });

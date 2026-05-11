@@ -225,9 +225,9 @@ describe("LiteLLM M2 — callback Langfuse + observation shape", () => {
     const obs = withCost[0]!;
 
     // Schema v3 — usageDetails y costDetails deben estar presentes
-    expect(obs.usageDetails).toBeDefined();
+    expect(obs.usageDetails).toBeTruthy();
     expect(typeof obs.usageDetails).toBe("object");
-    expect(obs.costDetails).toBeDefined();
+    expect(obs.costDetails).toBeTruthy();
 
     // Tokens de input presentes (campo 'input' en usageDetails de Langfuse v3)
     const inputTokens =
