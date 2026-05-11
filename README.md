@@ -13,7 +13,7 @@ programáticos, y un MCP server para consultas agénticas.
 > 📜 **Changelog**: [`CHANGELOG.md`](./CHANGELOG.md)
 > 📊 **Dashboard Langfuse**: [`docs/operations/langfuse-dashboard-guide.md`](./docs/operations/langfuse-dashboard-guide.md)
 
-**v0.6.0-wip · 818 tests / 1475 expects / 0 fallos** · v1.0 cuando piloto exitoso (≥3 devs × 2 semanas)
+**v1.0.0 · 1053 tests / 1923 expects / 0 fallos**
 
 ---
 
