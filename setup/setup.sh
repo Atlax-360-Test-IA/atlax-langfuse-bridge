@@ -1,8 +1,24 @@
 #!/usr/bin/env bash
 # setup.sh — Atlax360 Claude Code → Langfuse hook installer
 # Compatible: Linux, macOS, WSL
-# Uso: bash setup.sh [LANGFUSE_HOST] [LANGFUSE_PUBLIC_KEY] [LANGFUSE_SECRET_KEY]
+# Uso: bash setup.sh [--env=dev|pro] [LANGFUSE_HOST] [LANGFUSE_PUBLIC_KEY] [LANGFUSE_SECRET_KEY]
 set -euo pipefail
+
+# ── Parse --env flag ──────────────────────────────────────────────────────────
+ENV_TARGET="dev"
+POSITIONAL_ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --env=dev) ENV_TARGET="dev" ;;
+    --env=pro) ENV_TARGET="pro" ;;
+    --env=*)
+      echo "Error: --env acepta solo 'dev' o 'pro'" >&2
+      exit 2
+      ;;
+    *) POSITIONAL_ARGS+=("$arg") ;;
+  esac
+done
+set -- "${POSITIONAL_ARGS[@]+"${POSITIONAL_ARGS[@]}"}"
 
 LANGFUSE_HOST="${1:-}"
 LANGFUSE_PUBLIC_KEY="${2:-}"
@@ -25,6 +41,7 @@ err()  { echo -e "${RED}✗${NC} $*"; }
 echo ""
 echo "  Atlax360 — Claude Code → Langfuse Setup"
 echo "  ─────────────────────────────────────────"
+echo "  Entorno objetivo: $ENV_TARGET"
 echo ""
 
 # ── 1. Check Bun ─────────────────────────────────────────────────────────────
@@ -112,11 +129,9 @@ else:
 PYEOF
 ok "Claude Code settings.json actualizado"
 
-# ── 5. Write credentials to dedicated file (chmod 600) + source from shell rc ─
-# Prior versions wrote credentials directly into ~/.zshrc (mode 644). That file
-# is world-readable on most systems and gets parsed by IDE settings sync, dotfile
-# backups, and diagnostic scripts. Use a dedicated 600 file (same pattern as
-# scripts/pilot-onboarding.sh) and source it from the shell rc.
+# ── 5. Write credentials to per-env file (chmod 600) + add shell aliases ──────
+# Credentials live in ~/.atlax-ai/dev.env or ~/.atlax-ai/pro.env (chmod 600).
+# The shell RC only gets aliases — no auto-source to avoid cross-contamination.
 SHELL_RC=""
 if [[ -f "$HOME/.zshrc" ]]; then
   SHELL_RC="$HOME/.zshrc"
@@ -125,37 +140,45 @@ elif [[ -f "$HOME/.bashrc" ]]; then
 fi
 
 ATLAX_DIR="$HOME/.atlax-ai"
-ENV_FILE="$ATLAX_DIR/bridge.env"
+ENV_FILE="$ATLAX_DIR/${ENV_TARGET}.env"
 
 if [[ -n "$LANGFUSE_HOST" && -n "$LANGFUSE_PUBLIC_KEY" && -n "$LANGFUSE_SECRET_KEY" ]]; then
   mkdir -p "$ATLAX_DIR"
-  # Write atomically with 600 permissions
+  chmod 700 "$ATLAX_DIR"
+  # Write with 600 permissions (umask ensures no group/other bits)
   umask_old=$(umask)
   umask 077
   cat > "$ENV_FILE" <<ENVEOF
-# Langfuse — Atlax360 Claude Code telemetry credentials
-# This file is sourced by your shell rc (chmod 600). Do not commit.
-export LANGFUSE_HOST="$LANGFUSE_HOST"
-export LANGFUSE_PUBLIC_KEY="$LANGFUSE_PUBLIC_KEY"
-export LANGFUSE_SECRET_KEY="$LANGFUSE_SECRET_KEY"
+# Langfuse — Atlax360 Claude Code telemetry credentials (${ENV_TARGET})
+# Generado por setup.sh el $(date -u +%Y-%m-%dT%H:%M:%SZ)
+# NUNCA commitear. chmod 600.
+export LANGFUSE_HOST="${LANGFUSE_HOST}"
+export LANGFUSE_PUBLIC_KEY="${LANGFUSE_PUBLIC_KEY}"
+export LANGFUSE_SECRET_KEY="${LANGFUSE_SECRET_KEY}"
 ENVEOF
   chmod 600 "$ENV_FILE"
   umask "$umask_old"
   ok "Credenciales guardadas en $ENV_FILE (chmod 600)"
 
   if [[ -n "$SHELL_RC" ]]; then
-    # Remove inline LANGFUSE_* exports from shell rc (legacy installs) and any
-    # previous source line, then append a single source line.
-    grep -v "LANGFUSE_HOST\|LANGFUSE_PUBLIC_KEY\|LANGFUSE_SECRET_KEY\|.atlax-ai/bridge.env" "$SHELL_RC" > "${SHELL_RC}.tmp" || true
+    # Remove any legacy source/export lines and previous alias blocks for atlax-env-*
+    grep -v \
+      "LANGFUSE_HOST\|LANGFUSE_PUBLIC_KEY\|LANGFUSE_SECRET_KEY\|atlax-ai/bridge.env\|atlax-ai/reconcile.env\|atlax-env-dev\|atlax-env-pro" \
+      "$SHELL_RC" > "${SHELL_RC}.tmp" || true
     mv "${SHELL_RC}.tmp" "$SHELL_RC"
 
     cat >> "$SHELL_RC" <<RCEOF
 
-# Atlax Langfuse Bridge — load credentials from dedicated 600 file
-[ -f "\$HOME/.atlax-ai/bridge.env" ] && source "\$HOME/.atlax-ai/bridge.env"
+# Atlax Langfuse Bridge — entorno DEV / PRO (añadido por setup.sh)
+# Sourcear manualmente antes de ejecutar reconciler o scripts:
+#   atlax-env-dev   → apunta a http://localhost:3000 (local)
+#   atlax-env-pro   → apunta a https://langfuse.atlax360.ai (producción)
+alias atlax-env-dev='source "\$HOME/.atlax-ai/dev.env"'
+alias atlax-env-pro='source "\$HOME/.atlax-ai/pro.env"'
 RCEOF
-    ok "Línea de carga añadida a $SHELL_RC"
+    ok "Aliases atlax-env-dev / atlax-env-pro añadidos a $SHELL_RC"
     warn "Ejecuta: source $SHELL_RC"
+    warn "Para activar el entorno ${ENV_TARGET}: $([ "$ENV_TARGET" = "dev" ] && echo 'atlax-env-dev' || echo 'atlax-env-pro')"
   fi
 else
   warn "No se proporcionaron credenciales. Crea manualmente $ENV_FILE (chmod 600):"

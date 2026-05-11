@@ -3,7 +3,7 @@
 #
 # Uso (una sola línea, sin clonar el repo):
 #   curl -fsSL https://raw.githubusercontent.com/atlax360/atlax-langfuse-bridge/main/setup/pilot-onboarding.sh \
-#     | bash -s -- <LANGFUSE_HOST> <LANGFUSE_PUBLIC_KEY> <LANGFUSE_SECRET_KEY>
+#     | bash -s -- [--env=dev|pro] <LANGFUSE_HOST> <LANGFUSE_PUBLIC_KEY> <LANGFUSE_SECRET_KEY>
 #
 # Compatible: Linux, WSL, macOS (Big Sur+)
 # Requisitos: bun >= 1.0, Claude Code >= 1.0, python3 (para editar settings.json)
@@ -12,10 +12,26 @@
 #   1. Descarga hook + shared/ (5 módulos) desde GitHub sin clonar el repo
 #   2. Instala en ~/.claude/hooks/ + ~/.claude/shared/
 #   3. Registra el hook Stop en ~/.claude/settings.json
-#   4. Escribe credenciales en ~/.atlax-ai/reconcile.env (modo 600) + carga en shell RC
+#   4. Escribe credenciales en ~/.atlax-ai/{dev,pro}.env (modo 600) + aliases en shell RC
 #   5. Verifica systemd usuario (Linux/WSL) o muestra nota de gap (macOS/GAP-P01)
 #   6. Establece cleanupPeriodDays: 90 en ~/.claude/settings.json
 set -euo pipefail
+
+# ── Parse --env flag (default: pro — los devs del piloto conectan a PRO) ──────
+ENV_TARGET="pro"
+POSITIONAL_ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --env=dev) ENV_TARGET="dev" ;;
+    --env=pro) ENV_TARGET="pro" ;;
+    --env=*)
+      echo "Error: --env acepta solo 'dev' o 'pro'" >&2
+      exit 2
+      ;;
+    *) POSITIONAL_ARGS+=("$arg") ;;
+  esac
+done
+set -- "${POSITIONAL_ARGS[@]+"${POSITIONAL_ARGS[@]}"}"
 
 LANGFUSE_HOST="${1:-}"
 LANGFUSE_PUBLIC_KEY="${2:-}"
@@ -27,7 +43,7 @@ HOOK_DIR="$HOME/.claude/hooks"
 SHARED_DST="$HOME/.claude/shared"
 SETTINGS="$HOME/.claude/settings.json"
 ATLAX_DIR="$HOME/.atlax-ai"
-RECONCILE_ENV="$ATLAX_DIR/reconcile.env"
+ENV_FILE="$ATLAX_DIR/${ENV_TARGET}.env"
 
 SHARED_MODULES=(
   "shared/model-pricing.ts"
@@ -47,6 +63,7 @@ info() { echo -e "${BLUE}→${NC} $*"; }
 echo ""
 echo "  Atlax360 — Claude Code → Langfuse Onboarding"
 echo "  ══════════════════════════════════════════════"
+echo "  Entorno objetivo: $ENV_TARGET"
 echo ""
 
 # ── 1. Verificar requisitos ───────────────────────────────────────────────────
@@ -157,55 +174,69 @@ with open(settings_path, "w") as f:
 PYEOF
 ok "settings.json actualizado"
 
-# ── 4. Escribir credenciales en ~/.atlax-ai/reconcile.env ───────────────────
-info "Configurando credenciales del reconciler..."
+# ── 4. Escribir credenciales en ~/.atlax-ai/{dev,pro}.env ────────────────────
+info "Configurando credenciales (entorno: ${ENV_TARGET})..."
 
 mkdir -p "$ATLAX_DIR"
 chmod 700 "$ATLAX_DIR"
 
 if [[ -n "$LANGFUSE_HOST" && -n "$LANGFUSE_PUBLIC_KEY" && -n "$LANGFUSE_SECRET_KEY" ]]; then
-  cat > "$RECONCILE_ENV" <<ENVEOF
-# ~/.atlax-ai/reconcile.env — Credenciales Langfuse para el reconciler
+  umask_old=$(umask)
+  umask 077
+  cat > "$ENV_FILE" <<ENVEOF
+# ~/.atlax-ai/${ENV_TARGET}.env — Credenciales Langfuse para el reconciler (${ENV_TARGET})
 # Generado por pilot-onboarding.sh el $(date -u +%Y-%m-%dT%H:%M:%SZ)
+# NUNCA commitear. chmod 600.
 LANGFUSE_HOST=${LANGFUSE_HOST}
 LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
 LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
 WINDOW_HOURS=24
 ENVEOF
-  chmod 600 "$RECONCILE_ENV"
-  ok "Credenciales en $RECONCILE_ENV (modo 600)"
+  chmod 600 "$ENV_FILE"
+  umask "$umask_old"
+  ok "Credenciales en $ENV_FILE (modo 600)"
 
-  # Añadir al shell RC para que el hook pueda leerlas en sesión
+  # Añadir aliases al shell RC para activación manual explícita
   SHELL_RC=""
   [[ -f "$HOME/.zshrc" ]]  && SHELL_RC="$HOME/.zshrc"
   [[ -z "$SHELL_RC" && -f "$HOME/.bashrc" ]] && SHELL_RC="$HOME/.bashrc"
 
   if [[ -n "$SHELL_RC" ]]; then
-    # Eliminar entradas anteriores para evitar duplicados
-    grep -v "LANGFUSE_HOST\|LANGFUSE_PUBLIC_KEY\|LANGFUSE_SECRET_KEY\|atlax-ai.*reconcile" \
+    # Eliminar entradas anteriores (legacy reconcile.env, bridge.env, y alias block)
+    grep -v \
+      "LANGFUSE_HOST\|LANGFUSE_PUBLIC_KEY\|LANGFUSE_SECRET_KEY\|atlax-ai.*reconcile\|atlax-ai/bridge.env\|atlax-env-dev\|atlax-env-pro" \
       "$SHELL_RC" > "${SHELL_RC}.atlax.tmp" 2>/dev/null || true
     mv "${SHELL_RC}.atlax.tmp" "$SHELL_RC"
 
     cat >> "$SHELL_RC" <<SHELLEOF
 
 # Langfuse — Atlax360 Claude Code telemetry (añadido por pilot-onboarding.sh)
-set -a; [[ -f "$RECONCILE_ENV" ]] && source "$RECONCILE_ENV"; set +a
+# Sourcear manualmente según contexto — NO se auto-carga para evitar cross-contamination:
+#   atlax-env-dev   → apunta a http://localhost:3000 (local)
+#   atlax-env-pro   → apunta a https://langfuse.atlax360.ai (producción)
+alias atlax-env-dev='source "\$HOME/.atlax-ai/dev.env"'
+alias atlax-env-pro='source "\$HOME/.atlax-ai/pro.env"'
 SHELLEOF
-    ok "Shell RC ($SHELL_RC) carga credenciales de reconcile.env"
+    ok "Aliases atlax-env-dev / atlax-env-pro añadidos a $SHELL_RC"
     warn "Ejecuta: source $SHELL_RC"
+    warn "Para activar el entorno ${ENV_TARGET}: $([ "$ENV_TARGET" = "dev" ] && echo 'atlax-env-dev' || echo 'atlax-env-pro')"
   else
-    warn "No se encontró .zshrc ni .bashrc — añade manualmente: source $RECONCILE_ENV"
+    warn "No se encontró .zshrc ni .bashrc — añade manualmente: source $ENV_FILE"
   fi
 else
-  warn "No se proporcionaron credenciales. Créa $RECONCILE_ENV con:"
+  warn "No se proporcionaron credenciales. Créa $ENV_FILE con:"
   echo ""
-  echo "  cat > ~/.atlax-ai/reconcile.env <<EOF"
-  echo "  LANGFUSE_HOST=https://langfuse.atlax360.com"
+  echo "  cat > ~/.atlax-ai/${ENV_TARGET}.env <<EOF"
+  if [[ "$ENV_TARGET" == "pro" ]]; then
+    echo "  LANGFUSE_HOST=https://langfuse.atlax360.ai"
+  else
+    echo "  LANGFUSE_HOST=http://localhost:3000"
+  fi
   echo "  LANGFUSE_PUBLIC_KEY=pk-lf-..."
   echo "  LANGFUSE_SECRET_KEY=sk-lf-..."
   echo "  WINDOW_HOURS=24"
   echo "  EOF"
-  echo "  chmod 600 ~/.atlax-ai/reconcile.env"
+  echo "  chmod 600 ~/.atlax-ai/${ENV_TARGET}.env"
   echo ""
 fi
 
@@ -248,7 +279,7 @@ stop = s.get('hooks', {}).get('Stop', [])
 found = any(any('langfuse-sync' in h.get('command','') for h in g.get('hooks',[])) for g in stop)
 exit(0 if found else 1)
 " 2>/dev/null && SETTINGS_OK=true
-[[ -f "$RECONCILE_ENV" ]] && ENV_OK=true
+[[ -f "$ENV_FILE" ]] && ENV_OK=true
 
 status_icon() { [[ "$1" == true ]] && echo -e "${GREEN}✓${NC}" || echo -e "${RED}✗${NC}"; }
 
@@ -257,9 +288,9 @@ echo -e "  $(printf '%-40s' 'Hook instalado')         $(status_icon "$HOOK_OK")"
 echo -e "  $(printf '%-40s' 'Módulos shared/')         $(status_icon "$SHARED_OK")"
 echo -e "  $(printf '%-40s' 'settings.json actualizado') $(status_icon "$SETTINGS_OK")"
 if $ENV_OK; then
-  echo -e "  $(printf '%-40s' 'reconcile.env creado')    ${GREEN}✓${NC}"
+  echo -e "  $(printf '%-40s' "${ENV_TARGET}.env creado")    ${GREEN}✓${NC}"
 else
-  echo -e "  $(printf '%-40s' 'reconcile.env creado')    ${YELLOW}⚠  — añade credenciales manualmente${NC}"
+  echo -e "  $(printf '%-40s' "${ENV_TARGET}.env creado")    ${YELLOW}⚠  — añade credenciales manualmente${NC}"
 fi
 echo ""
 

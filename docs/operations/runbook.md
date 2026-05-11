@@ -6,6 +6,7 @@
 
 ## Índice
 
+- [Env files DEV vs PRO](#env-files-dev-vs-pro)
 - [Validar integridad contra Langfuse](#validar-integridad-contra-langfuse)
 - [Detectar y reparar drift](#detectar-y-reparar-drift)
 - [Estado y diagnóstico del cron reconciler](#estado-y-diagnóstico-del-cron-reconciler)
@@ -18,6 +19,93 @@
 - [Actualizar el hook en máquinas dev](#actualizar-el-hook-en-máquinas-dev)
 - [Reconciliación de coste contra Anthropic Admin API (S18-B/D)](#reconciliación-de-coste-contra-anthropic-admin-api-s18-bd)
 - [Actualizar pricing tras nuevo modelo Anthropic](#actualizar-pricing-tras-nuevo-modelo-anthropic)
+- [Upgrades de Langfuse](#upgrades-de-langfuse)
+
+---
+
+## Env files DEV vs PRO
+
+### Estructura
+
+Existen dos ficheros de credenciales separados, con `chmod 600`:
+
+| Fichero               | Entorno | Host                           |
+| --------------------- | ------- | ------------------------------ |
+| `~/.atlax-ai/dev.env` | DEV     | `http://localhost:3000`        |
+| `~/.atlax-ai/pro.env` | PRO     | `https://langfuse.atlax360.ai` |
+
+**Diferencia clave**: `dev.env` apunta al stack Langfuse local (localhost). `pro.env`
+apunta a la instancia de producción con credenciales reales.
+
+### Activar entorno antes de ejecutar reconciler o scripts
+
+SIEMPRE sourcear el fichero correcto antes de cualquier operación:
+
+```bash
+# Entorno PRO (producción)
+source ~/.atlax-ai/pro.env
+bun run scripts/reconcile-traces.ts
+
+# Entorno DEV (local)
+source ~/.atlax-ai/dev.env
+bun run scripts/reconcile-traces.ts
+```
+
+Si `setup.sh` o `pilot-onboarding.sh` ya configuraron el shell RC, también
+puedes usar los aliases:
+
+```bash
+atlax-env-pro   # equivale a: source ~/.atlax-ai/pro.env
+atlax-env-dev   # equivale a: source ~/.atlax-ai/dev.env
+```
+
+Los aliases son intencionales — **no se auto-cargan en el shell RC** para evitar
+cross-contamination (riesgo de reparar PRO con datos JSONL locales usando
+credenciales equivocadas).
+
+### Migrar desde el fichero legacy `reconcile.env`
+
+Si tu máquina tiene el fichero anterior `~/.atlax-ai/reconcile.env`, usa el
+script de migración incluido:
+
+```bash
+# Preview (sin cambios)
+bash setup/migrate-env-files.sh --dry-run
+
+# Migración real
+bash setup/migrate-env-files.sh
+```
+
+El script detecta el host configurado y renombra automáticamente:
+
+- `localhost` / `127.0.0.1` → `dev.env`
+- `https://*` → `pro.env`
+
+Si no puede clasificar el host, deja el fichero intacto y muestra instrucciones
+de migración manual.
+
+### Crear ficheros manualmente
+
+```bash
+# DEV
+umask 077
+cat > ~/.atlax-ai/dev.env <<EOF
+LANGFUSE_HOST=http://localhost:3000
+LANGFUSE_PUBLIC_KEY=pk-lf-PENDIENTE
+LANGFUSE_SECRET_KEY=sk-lf-PENDIENTE
+WINDOW_HOURS=24
+EOF
+chmod 600 ~/.atlax-ai/dev.env
+
+# PRO
+cat > ~/.atlax-ai/pro.env <<EOF
+LANGFUSE_HOST=https://langfuse.atlax360.ai
+LANGFUSE_PUBLIC_KEY=pk-lf-<real>
+LANGFUSE_SECRET_KEY=sk-lf-<real>
+WINDOW_HOURS=24
+EOF
+chmod 600 ~/.atlax-ai/pro.env
+```
 
 ---
 
@@ -583,6 +671,190 @@ git commit -m "chore(pricing): actualizar <modelo> a $X/$Y MTok"
 
 **Nota**: `sync-pricing.sh` detecta modelos faltantes pero no valida valores de precio —
 verificar siempre manualmente contra la página oficial de Anthropic.
+
+---
+
+## Upgrades de Langfuse
+
+> Procedimiento canónico para upgrade DEV → PRO. Validado en upgrade 3.172.1 → 3.173.0
+> (2026-05-11), traza completa en
+> [`docs/operations/upgrade-trace-2026-05-11.md`](./upgrade-trace-2026-05-11.md).
+
+### Pre-upgrade — verificación de release
+
+1. Comprobar última versión upstream:
+   ```bash
+   gh api repos/langfuse/langfuse/releases --jq '.[0:3] | .[] | "\(.tag_name) | \(.published_at)"'
+   ```
+2. Comparar con la versión pineada en `docker/docker-compose.yml` y `infra/cloud-run.yaml`.
+3. Revisar release notes — buscar:
+   - Breaking changes / migraciones de schema
+   - Nuevas env vars obligatorias
+   - Cambios en defaults TLS / CORS / rate-limiting
+4. Verificar migraciones nuevas:
+   ```bash
+   gh api repos/langfuse/langfuse/compare/vX.Y.Z...vA.B.C \
+     --jq '.files[] | select(.filename | test("migration|schema.prisma")) | .filename'
+   ```
+
+### Fase DEV — validación local (OBLIGATORIA antes de PRO)
+
+1. **Backup pre-upgrade** (PASO OBLIGATORIO — no skipear):
+
+   ```bash
+   bash scripts/backup-langfuse.sh
+   ```
+
+   Verifica que se generaron dumps en `~/.atlax-ai/backups/daily/` con tamaño esperado
+   (pg: decenas de KB+, ch: cientos de KB+). El script sale con código 2 si falla; no
+   continuar hasta que salga 0.
+
+2. Bump versión en `docker/docker-compose.yml` (web + worker — 2 líneas).
+
+3. Pull imágenes en paralelo (las imágenes de Langfuse pesan ~1.5GB cada una; el pull
+   secuencial tarda ~16min en broadband doméstico):
+
+   ```bash
+   docker pull langfuse/langfuse:NEW_VERSION &
+   docker pull langfuse/langfuse-worker:NEW_VERSION &
+   wait
+   ```
+
+4. Recreate solo web + worker (preserva uptime de postgres/clickhouse/redis/minio):
+
+   ```bash
+   docker compose -f docker/docker-compose.yml up -d --no-deps langfuse-web langfuse-worker
+   ```
+
+5. Esperar healthy (poll, no sleep):
+
+   ```bash
+   for i in $(seq 1 24); do
+     STATUS=$(docker inspect docker-langfuse-web-1 --format '{{.State.Health.Status}}' 2>/dev/null)
+     [ "$STATUS" = "healthy" ] && break
+     sleep 5
+   done
+   ```
+
+6. Verificar migraciones aplicadas (Postgres):
+
+   ```bash
+   docker exec docker-postgres-1 psql -U langfuse -d langfuse -c \
+     "SELECT migration_name FROM _prisma_migrations ORDER BY started_at DESC LIMIT 5;"
+   ```
+
+7. **Smoke E2E** contra DEV:
+
+   ```bash
+   source ~/.atlax-ai/dev.env
+   bun run scripts/smoke-mcp-e2e.ts
+   ```
+
+   Deben pasar 8/8 checks. Ver la sección [Smoke E2E](#smoke-e2e) en el runbook de
+   LiteLLM para detalles del test funcional.
+
+8. Suite completa:
+
+   ```bash
+   bun run check
+   ```
+
+9. Si todo verde, commit + PR + merge antes de tocar PRO (regla "limpio antes de avanzar").
+
+### Fase PRO — promoción a producción
+
+1. Verificar gcloud config:
+
+   ```bash
+   gcloud config get-value account  # debe ser jgcalvo@atlax360.com
+   ```
+
+2. Verificar Cloud SQL PITR activo (rollback path garantizado):
+
+   ```bash
+   gcloud sql instances list --project=atlax360-ai-langfuse-pro \
+     --format='value(name,settings.backupConfiguration.pointInTimeRecoveryEnabled)'
+   ```
+
+3. Render manifest:
+
+   ```bash
+   export LANGFUSE_VERSION=NEW_VERSION
+   export GCP_PROJECT_ID=atlax360-ai-langfuse-pro
+   envsubst < infra/cloud-run.yaml > /tmp/cloud-run.rendered.yaml
+   ```
+
+   Verificar que no quedan variables sin resolver (`grep '\$' /tmp/cloud-run.rendered.yaml`
+   solo debe mostrar variables de entorno de la propia aplicación, no `$LANGFUSE_VERSION`).
+
+4. Split por servicio:
+
+   ```bash
+   awk 'BEGIN{n=0} /^apiVersion/{n++} {print > "/tmp/cr-svc-" n ".yaml"}' \
+     /tmp/cloud-run.rendered.yaml
+   ```
+
+5. Deploy web primero (corre migraciones Postgres en arranque):
+
+   ```bash
+   gcloud run services replace /tmp/cr-svc-1.yaml \
+     --region=europe-west1 --project=atlax360-ai-langfuse-pro
+   ```
+
+6. Smoke de health básico contra dominio:
+
+   ```bash
+   curl -s -o /dev/null -w "HTTP %{http_code}\n" https://langfuse.atlax360.ai/api/public/health
+   ```
+
+   Debe ser 200.
+
+7. Deploy worker:
+
+   ```bash
+   gcloud run services replace /tmp/cr-svc-2.yaml \
+     --region=europe-west1 --project=atlax360-ai-langfuse-pro
+   ```
+
+8. Verificar 0 errors en logs (5min freshness):
+
+   ```bash
+   gcloud logging read 'resource.type="cloud_run_revision" AND severity>=ERROR' \
+     --project=atlax360-ai-langfuse-pro --freshness=5m --limit=5
+   ```
+
+9. **Smoke E2E real** contra PRO:
+   ```bash
+   source ~/.atlax-ai/reconcile.env
+   bun run scripts/smoke-mcp-e2e.ts
+   ```
+   Deben pasar 8/8 checks.
+
+### Rollback (si algo falla en PRO)
+
+```bash
+# Listar revisiones disponibles
+gcloud run revisions list --service=langfuse-web --region=europe-west1 \
+  --project=atlax360-ai-langfuse-pro --limit=3
+
+# Rollback a revisión previa (reemplazar NNNNN-XXX con el ID de la revisión anterior)
+gcloud run services update-traffic langfuse-web \
+  --to-revisions=langfuse-web-NNNNN-XXX=100 \
+  --region=europe-west1 --project=atlax360-ai-langfuse-pro
+```
+
+Si las migraciones Postgres rompieron el schema: Cloud SQL PITR restore al punto
+pre-upgrade. Ver también la sección [Rollback de Langfuse](#rollback-de-langfuse) para
+procedimiento de rollback del stack local.
+
+### Bump de pinning post-upgrade
+
+Tras confirmar PRO operativo, actualizar todos los pines de versión:
+
+- `docker/docker-compose.yml` — `image:` de web + worker
+- `infra/cloud-run.yaml` — comment header de versión
+- `infra/provision-pro.sh` — default `LANGFUSE_VERSION=`
+- `CHANGELOG.md` — entrada bajo `[Unreleased]`
 
 ---
 
