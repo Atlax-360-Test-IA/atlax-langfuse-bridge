@@ -26,7 +26,11 @@ import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { aggregate } from "../shared/aggregate";
 import { classifyDrift, type DriftStatus } from "../shared/drift";
-import { emitDegradation, type DegradationEntry } from "../shared/degradation";
+import {
+  emitDegradation,
+  serializeError,
+  type DegradationEntry,
+} from "../shared/degradation";
 import {
   getTrace as langfuseGetTrace,
   getGenerationsForTrace as langfuseGetGenerationsForTrace,
@@ -39,6 +43,7 @@ import {
   sumCostByModel,
 } from "../shared/anthropic-admin-client";
 import { SAFE_SID_RE } from "../shared/validation";
+import { COST_EPSILON } from "../shared/constants";
 
 // Re-export for tests and downstream consumers that historically imported
 // from this module (kept stable as a public API surface).
@@ -542,7 +547,7 @@ export async function runReconcile(
     const entry: DegradationEntry = {
       type: "degradation",
       source,
-      error: err instanceof Error ? err.message : String(err),
+      error: serializeError(err),
       ts: new Date().toISOString(),
     };
     collectedDegradations.push(entry);
@@ -592,7 +597,11 @@ export async function runReconcile(
     const localForDrift = { ...local, end: local.end ?? null };
     let status = classifyDrift(localForDrift, remote);
 
-    if (status === "OK" && local.totalCost > 0.01) {
+    // Si el primer classifyDrift dice OK pero el coste local supera el threshold,
+    // hacer un segundo check con getGenerationCost para detectar drift de coste
+    // por debajo del nivel de turns (typo de coste en metadata sin cambio en turns).
+    // Threshold consistente con COST_EPSILON para no introducir drift entre módulos.
+    if (status === "OK" && local.totalCost > COST_EPSILON) {
       const genCost = await getGenerationCost(tid);
       status = classifyDrift(localForDrift, remote, genCost);
     }

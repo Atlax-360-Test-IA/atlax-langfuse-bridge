@@ -23,9 +23,9 @@ describe("extension pricing.js ↔ shared/model-pricing.ts sync (I-6)", () => {
     for (const model of Object.keys(TS_PRICING)) {
       const ts = TS_PRICING[model]!;
       const js = (JS_PRICING as Record<string, typeof ts>)[model];
-      expect(js).toBeDefined();
+      expect(js).toBeTruthy();
       for (const field of FIELDS) {
-        expect(js![field]).toBe(ts[field]);
+        expect((js as typeof ts)[field]).toBe(ts[field]);
       }
     }
   });

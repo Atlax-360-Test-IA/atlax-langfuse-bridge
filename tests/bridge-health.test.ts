@@ -106,8 +106,11 @@ describe("sendBridgeHealthTrace", () => {
     const body = captured!.body as { batch: Array<Record<string, unknown>> };
     expect(Array.isArray(body.batch)).toBe(true);
     const trace = body.batch.find((e) => e["type"] === "trace-create");
-    expect(trace).toBeDefined();
-    const tb = trace!["body"] as Record<string, unknown>;
+    expect(trace).toBeTruthy();
+    const tb = (trace as Record<string, unknown>)["body"] as Record<
+      string,
+      unknown
+    >;
     expect(tb["name"]).toBe("bridge-health");
   });
 

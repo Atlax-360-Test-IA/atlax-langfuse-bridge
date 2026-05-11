@@ -15,6 +15,64 @@ Semver retroactivo. Política:
 
 ---
 
+## [1.0.1] — 2026-05-11
+
+Pase de auditoría final exhaustiva pre-sellado v1.0.0 (4 agentes paralelos:
+backend, tests, infra, docs). 14 hallazgos cerrados, 3 falsos positivos
+descartados por verificación cruzada I-14.
+
+### Fixed
+
+- **Aserción tautológica en `tests/mcp-server-coverage.test.ts:228`**
+  (`x.length >= 0` siempre true). El test pasaba aunque el OOM guard fallara.
+- **`session_id` propagado a `traceId` sin validar charset/length** —
+  `hooks/langfuse-sync.ts` ahora rechaza IDs que no cumplen `SAFE_SID_RE` con
+  emit degradation + exit 0 (I-1). 3 tests nuevos: path traversal, length>128,
+  control chars.
+- **Métricas tests inconsistentes** entre README.md, ARCHITECTURE.md y comments
+  inline (1053 / 818 / 901). Sincronizadas a 1059 + test guard nuevo en
+  `tests/sdd-invariants.test.ts` que parsea ambos docs y compara.
+- **`Promise.all` → `Promise.allSettled` defensivo** en `shared/jsonl-discovery.ts`
+  para no abortar scan completo si una stat falla inesperadamente.
+- **Threshold mágico `0.01` → `COST_EPSILON`** en `scripts/reconcile-traces.ts`
+  (consistencia con `shared/constants.ts`).
+- **`return void expect(true).toBe(true)` → `describe.skipIf`** en
+  `tests/litellm-m3-virtual-keys.test.ts`. Métrica honesta: 5 skip en lugar
+  de 5 "pass" sin assertions.
+- **14 `toBeDefined()` débiles** → `toBeTruthy()` + `typeof check` en 12 ficheros.
+- **PID → `randomUUID()`** en `scripts/detect-tier.ts` tmp file naming.
+- **`sendToLangfuse` con try/catch explícito** + degradation estructurada para
+  network errors y AbortError (timeout).
+
+### Added
+
+- **Invariante I-15**: validar IDs antes de propagar a sistemas externos.
+  Documentado en CLAUDE.md, ARCHITECTURE.md Apéndice A, y SDD enforcement tests.
+- **ADR-017**: `NODE_TLS_REJECT_UNAUTHORIZED=0` para Memorystore Redis en VPC
+  privada. Decisión formal con trade-off + controles mitigantes + path de upgrade.
+- **`serializeError` helper** en `shared/degradation.ts` para evitar duplicación
+  del check `err instanceof Error` en cada call site.
+- **`docs/glossary.md`** con naming canónico (Hook Stop / Reconciler / MCP server)
+  para evitar drift cross-doc.
+
+### Changed
+
+- **Rules globales actualizadas** para que futuros proyectos no repitan los
+  antipatterns:
+  - `~/.claude/rules/testing.md` §"Aserciones tautológicas" + §"toBeDefined débil" + §"Skip condicional canónico"
+  - `~/.claude/rules/security.md` §"Validar IDs antes de propagar (I-15)" + §"TLS verification disabled requiere ADR formal"
+  - `~/.claude/rules/cross-project-patterns.md` §"Promise.allSettled para FS" + §"Constantes numéricas" + §"serializeError helper"
+
+### Metrics
+
+- Tests: **1054 pass** / **5 skip** / **1933 expects** / **64 ficheros** / 0 fail
+- ADRs: **17** (era 16 — añadido ADR-017)
+- Invariantes: **I-1..I-15** (era I-1..I-14 — añadido I-15)
+- Auto-verificación: `tests/sdd-invariants.test.ts` enforce ahora que las
+  métricas en README ↔ ARCHITECTURE.md no driften
+
+---
+
 ## [1.0.0] — 2026-05-11
 
 Versión estable. Cumple los exit criteria definidos en S24-B: stack PRO activo en
@@ -75,7 +133,7 @@ LiteLLM gateway operativo con trazabilidad per-workload.
 
 - ADR-008: límites de recuperabilidad 2-layer consistency + incidente 22-Apr-2026
 - ADR-009: quota limits y throttling MCP
-- ADR-010: cost-source tag unificado
+- ADR-010: LiteLLM milestone plan M1→M3 con exit criteria
 - ADR-011: límites paralelismo agéntico (I-14)
 - ADR-012: ClickHouse self-hosted GCE vs. Cloud/Aiven
 - ADR-013: Cloud SQL private-only (sin IP pública)

@@ -22,7 +22,7 @@ describe("WORKLOADS — virtual keys de producción (2026-05-10)", () => {
 
   test("orvian-prod tiene los límites comprometidos al equipo", () => {
     const orvian = WORKLOADS.find((w) => w.key_alias === "orvian-prod");
-    expect(orvian).toBeDefined();
+    expect(orvian).toBeTruthy();
     expect(orvian!.soft_budget).toBe(50);
     expect(orvian!.budget_duration).toBe("30d");
     expect(orvian!.tpm_limit).toBe(200_000);
@@ -34,7 +34,7 @@ describe("WORKLOADS — virtual keys de producción (2026-05-10)", () => {
 
   test("atalaya-prod tiene los límites comprometidos al equipo", () => {
     const atalaya = WORKLOADS.find((w) => w.key_alias === "atalaya-prod");
-    expect(atalaya).toBeDefined();
+    expect(atalaya).toBeTruthy();
     expect(atalaya!.soft_budget).toBe(20);
     expect(atalaya!.budget_duration).toBe("30d");
     expect(atalaya!.tpm_limit).toBe(100_000);

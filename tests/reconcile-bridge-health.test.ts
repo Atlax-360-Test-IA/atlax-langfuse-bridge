@@ -87,8 +87,11 @@ describe("sendBridgeHealthTrace — HTTP success (status ok)", () => {
     const traceEvent = (batch as Array<Record<string, unknown>>).find(
       (e) => e["type"] === "trace-create",
     );
-    expect(traceEvent).toBeDefined();
-    const body = traceEvent!["body"] as Record<string, unknown>;
+    expect(traceEvent).toBeTruthy();
+    const body = (traceEvent as Record<string, unknown>)["body"] as Record<
+      string,
+      unknown
+    >;
     expect(body["name"]).toBe("bridge-health");
     expect(body["id"] as string).toMatch(
       /^bridge-reconciler-\d{4}-\d{2}-\d{2}$/,

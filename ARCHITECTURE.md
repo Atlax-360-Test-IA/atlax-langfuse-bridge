@@ -161,7 +161,7 @@ atlax-langfuse-bridge/
 │   └── backup-story.md               # Cloud SQL PITR + ClickHouse + GCS
 │
 ├── docs/
-│   ├── adr/                          # 16 ADRs Michael Nygard (ADR-001..ADR-016)
+│   ├── adr/                          # 17 ADRs Michael Nygard (ADR-001..ADR-017)
 │   ├── operations/
 │   │   ├── runbook.md                # Runbook operativo
 │   │   ├── litellm-onboarding.md     # Guía onboarding devs piloto (S21-A)
@@ -177,7 +177,7 @@ atlax-langfuse-bridge/
 ├── CHANGELOG.md                      # Semver retroactivo
 ├── ORGANIZATION.md                   # Convenciones Atlax
 ├── README.md                         # Quick Start + setup
-└── CLAUDE.md                         # Invariantes I-1..I-14 (instrucciones Claude Code)
+└── CLAUDE.md                         # Invariantes I-1..I-15 (instrucciones Claude Code)
 ```
 
 ### Tabla de módulos `shared/` con invariante implementado
@@ -426,7 +426,7 @@ Ver `infra/backup-story.md` para detalle de backup story (RPO ≤ 1 min).
 
 ## §10 · Testing
 
-**Estado actual**: 901 tests / 1610 expects / 55 ficheros / 0 fallos (2026-05-10).
+**Estado actual**: 1059 tests / 1933 expects / 64 ficheros / 0 fallos (2026-05-11).
 
 ### Pirámide de tests
 
@@ -456,6 +456,7 @@ Ver `infra/backup-story.md` para detalle de backup story (RPO ≤ 1 min).
 | **I-12**   | `tests/cross-validation.test.ts:90` (`tier detection consistency (I-12)`)                                                   |
 | **I-13**   | `tests/cloud-run-boundary.test.ts` (17 tests, ADR ejecutable)                                                               |
 | **I-14**   | `docs/experiments/2026-05-07-parallel-subagent-experiment.md` + `docs/adr/ADR-011-parallel-subagent-limits.md` (documental) |
+| **I-15**   | `tests/langfuse-sync-main.test.ts` (3 tests: SAFE_SID_RE rechaza traversal, length>128, control chars)                      |
 
 ### Comandos
 
@@ -669,6 +670,7 @@ Verdades no-negociables del sistema:
 | Restauración `process.env` per-key en tests                             | I-12       | —       |
 | Reconciler/hook/discovery NUNCA migran a Cloud Run                      | I-13       | ADR-002 |
 | Paralelismo agéntico: N≤5 read-only, N≤3 write, doble-check obligatorio | I-14       | ADR-011 |
+| Validar IDs antes de propagar (SAFE_SID_RE en stdin del hook)           | I-15       | —       |
 
 **Límites estructurales externos documentados:**
 

@@ -27,6 +27,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
 export type BillingTier = "vertex-gcp" | "api-direct" | "seat-team" | "unknown";
 
@@ -103,7 +104,9 @@ export function writeIfChanged(tier: TierFile): boolean {
 
   if (unchanged) return false;
 
-  const tmp = `${TIER_PATH}.tmp.${process.pid}`;
+  // randomUUID en lugar de process.pid: defensa contra PID reuse (tras 2^22
+  // procesos en Linux) en máquinas con muchas sesiones concurrentes.
+  const tmp = `${TIER_PATH}.tmp.${randomUUID()}`;
   // chmod 600 — defense in depth. tier.json may carry an `account` field
   // (currently null per I-8 but reserved); 600 keeps it private if it
   // becomes sensitive in the future. Writes atomically via tmp + rename.

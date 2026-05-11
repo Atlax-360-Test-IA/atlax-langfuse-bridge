@@ -155,10 +155,14 @@ afterAll(async () => {
 
 // ─── S20-A: /key/generate operativo ─────────────────────────────────────────
 
-describe("S20-A · /key/generate operativo", () => {
+// Si LITELLM_MASTER_KEY no está en el entorno, todo el bloque smoke se skippea.
+// Esto evita inflar el conteo de tests con "passes" sin assertions cuando se
+// corre la suite localmente sin credenciales del gateway.
+describe.skipIf(!LITELLM_MASTER_KEY)("S20-A · /key/generate operativo", () => {
   test("crea virtual key con shape correcto", async () => {
-    if (!LITELLM_MASTER_KEY) return void expect(true).toBe(true); // skip
-    if (!reachable) return void expect(true).toBe(true);
+    // Skip graceful: las precondiciones ENV se filtran con test.skipIf abajo.
+    // `reachable` se setea en beforeAll, así que aquí solo es seguro early-return.
+    if (!reachable) return;
 
     const res = await fetch(`${LITELLM_BASE_URL}/key/generate`, {
       method: "POST",
@@ -208,8 +212,7 @@ describe("S20-A · /key/generate operativo", () => {
   });
 
   test("key_alias duplicado devuelve error 400", async () => {
-    if (!LITELLM_MASTER_KEY) return void expect(true).toBe(true);
-    if (!reachable || !budgetKey) return void expect(true).toBe(true);
+    if (!reachable || !budgetKey) return;
 
     const res = await fetch(`${LITELLM_BASE_URL}/key/generate`, {
       method: "POST",
@@ -229,42 +232,13 @@ describe("S20-A · /key/generate operativo", () => {
 
 // ─── S20-B: budget enforcement ───────────────────────────────────────────────
 
-describe("S20-B · budget enforcement → 400 budget_exceeded", () => {
-  test("primera llamada con key de budget mínimo tiene éxito (200)", async () => {
-    if (!LITELLM_MASTER_KEY) return void expect(true).toBe(true);
-    if (!reachable || !budgetKey) return void expect(true).toBe(true);
+describe.skipIf(!LITELLM_MASTER_KEY)(
+  "S20-B · budget enforcement → 400 budget_exceeded",
+  () => {
+    test("primera llamada con key de budget mínimo tiene éxito (200)", async () => {
+      if (!reachable || !budgetKey) return;
 
-    const res = await fetch(`${LITELLM_BASE_URL}/v1/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${budgetKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "anthropic/claude-haiku-4-5-20251001",
-        messages: [{ role: "user", content: "hi" }],
-        max_tokens: 3,
-      }),
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    // Primera llamada puede pasar (enforcement asíncrono)
-    expect([200, 400]).toContain(res.status);
-  });
-
-  test("segunda llamada devuelve 400 con type=budget_exceeded", async () => {
-    if (!LITELLM_MASTER_KEY) return void expect(true).toBe(true);
-    if (!reachable || !budgetKey) return void expect(true).toBe(true);
-
-    // LiteLLM applies budget enforcement asynchronously after the first call.
-    // Poll with exponential backoff (250ms, 500ms, 1s, 2s, 4s — capped at 8s
-    // total) until we get a 400 budget_exceeded, instead of a flaky fixed sleep.
-    let res!: Response;
-    let lastStatus = 0;
-    let delayMs = 250;
-    const deadline = Date.now() + 8_000;
-    while (Date.now() < deadline) {
-      res = await fetch(`${LITELLM_BASE_URL}/v1/chat/completions`, {
+      const res = await fetch(`${LITELLM_BASE_URL}/v1/chat/completions`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${budgetKey}`,
@@ -272,25 +246,55 @@ describe("S20-B · budget enforcement → 400 budget_exceeded", () => {
         },
         body: JSON.stringify({
           model: "anthropic/claude-haiku-4-5-20251001",
-          messages: [{ role: "user", content: "ping" }],
+          messages: [{ role: "user", content: "hi" }],
           max_tokens: 3,
         }),
         signal: AbortSignal.timeout(15_000),
       });
-      lastStatus = res.status;
-      if (res.status === 400) break;
-      await new Promise((r) => setTimeout(r, delayMs));
-      delayMs = Math.min(delayMs * 2, 4_000);
-    }
 
-    expect(lastStatus).toBe(400);
-    const body = (await res.json()) as {
-      error?: { type?: string; message?: string };
-    };
-    expect(body.error?.type).toBe("budget_exceeded");
-    expect(body.error?.message).toContain("Budget has been exceeded");
-  });
-});
+      // Primera llamada puede pasar (enforcement asíncrono)
+      expect([200, 400]).toContain(res.status);
+    });
+
+    test("segunda llamada devuelve 400 con type=budget_exceeded", async () => {
+      if (!reachable || !budgetKey) return;
+
+      // LiteLLM applies budget enforcement asynchronously after the first call.
+      // Poll with exponential backoff (250ms, 500ms, 1s, 2s, 4s — capped at 8s
+      // total) until we get a 400 budget_exceeded, instead of a flaky fixed sleep.
+      let res!: Response;
+      let lastStatus = 0;
+      let delayMs = 250;
+      const deadline = Date.now() + 8_000;
+      while (Date.now() < deadline) {
+        res = await fetch(`${LITELLM_BASE_URL}/v1/chat/completions`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${budgetKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "anthropic/claude-haiku-4-5-20251001",
+            messages: [{ role: "user", content: "ping" }],
+            max_tokens: 3,
+          }),
+          signal: AbortSignal.timeout(15_000),
+        });
+        lastStatus = res.status;
+        if (res.status === 400) break;
+        await new Promise((r) => setTimeout(r, delayMs));
+        delayMs = Math.min(delayMs * 2, 4_000);
+      }
+
+      expect(lastStatus).toBe(400);
+      const body = (await res.json()) as {
+        error?: { type?: string; message?: string };
+      };
+      expect(body.error?.type).toBe("budget_exceeded");
+      expect(body.error?.message).toContain("Budget has been exceeded");
+    });
+  },
+);
 
 // ─── S20-C: atribución en Langfuse ──────────────────────────────────────────
 
@@ -298,9 +302,8 @@ describe("S20-B · budget enforcement → 400 budget_exceeded", () => {
 const S20C_TIMEOUT_MS = 30_000;
 
 async function runS20CAttribution() {
-  if (!LITELLM_MASTER_KEY) return void expect(true).toBe(true);
-  if (!LANGFUSE_PK || !LANGFUSE_SK) return void expect(true).toBe(true);
-  if (!reachable || !attrKey) return void expect(true).toBe(true);
+  if (!LANGFUSE_PK || !LANGFUSE_SK) return;
+  if (!reachable || !attrKey) return;
 
   const fromTs = new Date().toISOString();
 
@@ -363,10 +366,13 @@ async function runS20CAttribution() {
   expect(typeof meta.user_api_key_user_id).toBe("string");
 }
 
-describe("S20-C · atribución de cost en Langfuse via virtual key", () => {
-  test(
-    "user_api_key_alias llega en metadata de la generation",
-    runS20CAttribution,
-    S20C_TIMEOUT_MS,
-  );
-});
+describe.skipIf(!LITELLM_MASTER_KEY)(
+  "S20-C · atribución de cost en Langfuse via virtual key",
+  () => {
+    test(
+      "user_api_key_alias llega en metadata de la generation",
+      runS20CAttribution,
+      S20C_TIMEOUT_MS,
+    );
+  },
+);

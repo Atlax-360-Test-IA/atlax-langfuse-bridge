@@ -38,6 +38,10 @@ export async function discoverRecentJsonls(
       onError?.("discoverJsonls:readdir-project", err);
       continue;
     }
+    // Promise.allSettled defensivo: aunque cada callback tiene try/catch local,
+    // un fallo no anticipado (e.g. found.push contra un Array.length limit) no
+    // debe abortar el scan completo. Las rejected entries se reportan vía onError
+    // sin interrumpir las fulfilled.
     const statPromises = files
       .filter((f) => f.endsWith(".jsonl"))
       .map(async (f) => {
@@ -49,7 +53,12 @@ export async function discoverRecentJsonls(
           onError?.("discoverJsonls:stat", err);
         }
       });
-    await Promise.all(statPromises);
+    const settled = await Promise.allSettled(statPromises);
+    for (const r of settled) {
+      if (r.status === "rejected") {
+        onError?.("discoverJsonls:stat-unexpected", r.reason);
+      }
+    }
   }
   return found.sort();
 }
