@@ -36,7 +36,7 @@ model_list:
 
   - model_name: vertex-claude-haiku-4-5
     litellm_params:
-      model: vertex_ai/claude-haiku-4-5-20251001
+      model: vertex_ai/claude-haiku-4-5
       vertex_project: atlax360-ai-langfuse-pro
       vertex_location: europe-west1
 
