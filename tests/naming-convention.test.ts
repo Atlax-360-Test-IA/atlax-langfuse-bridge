@@ -155,7 +155,10 @@ describe("Naming convention guard — Shared Platform v0.3 (D-009)", () => {
        * Patrón forbidden: subdominios de la forma `<x>.atlax.ai` que NO sean
        * `<x>.atlax360.ai`. Excluimos contextos legítimos:
        *
-       * - Filenames: `atlax-ai-shared-platform.md` (referencia al doc Kairos)
+       * - Filenames: `atlax-ai-shared-platform.md` (legacy — el doc canónico
+       *   vivió en Kairos como host transitorio hasta 2026-05-10; hoy en
+       *   atlax-360-ai-suite/ai-suite-platform como docs/SPEC.md v0.4. La regex
+       *   se mantiene porque los audit docs históricos aún lo referencian).
        * - Folder/path GCP: `atlax-ai` como folder name en GCP (legacy)
        * - Email: el `@atlax.ai` no aplica (no se usa en el repo)
        *
@@ -175,10 +178,12 @@ describe("Naming convention guard — Shared Platform v0.3 (D-009)", () => {
           const line = lines[i] ?? "";
           // Sanitizar: eliminar primero todas las ocurrencias canónicas
           const sanitized = line.replace(/atlax360\.ai/g, "ATLAX360_OK");
-          // También sanitizar referencias al doc Kairos `atlax-ai-shared-platform`
+          // Sanitizar referencias legacy a `atlax-ai-shared-platform` — aparece
+          // en audit docs históricos de validación que son inmutables por diseño.
+          // Doc canónico actual: atlax-360-ai-suite/ai-suite-platform/docs/SPEC.md
           const noKairosDocRef = sanitized.replace(
             /atlax-ai-shared-platform/g,
-            "KAIROS_DOC_OK",
+            "LEGACY_DOC_OK",
           );
           // Sanitizar ID de folder GCP `atlax-ai`
           const noFolderRef = noKairosDocRef.replace(
