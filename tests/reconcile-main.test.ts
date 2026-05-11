@@ -118,7 +118,8 @@ describe("runReconcile — sin candidatos en la ventana", () => {
   beforeEach(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "reconcile-test-"));
     // No JSONL files created → discoverRecentJsonls returns []
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = spyOn(globalThis, "fetch");
+    fetchSpy.mockImplementation(() =>
       Promise.resolve(new Response("{}", { status: 207 })),
     );
     process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
@@ -164,9 +165,8 @@ describe("runReconcile — candidato con drift MISSING (trace no existe en Langf
     tmpRoot = mkdtempSync(join(tmpdir(), "reconcile-test-"));
     writeSessionJsonl(tmpRoot, SESSION_ID);
     // getTrace → 404 (MISSING drift)
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
-      Promise.resolve(fetchNotFound()),
-    );
+    fetchSpy = spyOn(globalThis, "fetch");
+    fetchSpy.mockImplementation(() => Promise.resolve(fetchNotFound()));
     process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";
     process.env["LANGFUSE_SECRET_KEY"] = "sk-test";
     process.env["LANGFUSE_HOST"] = "http://localhost:3000";
@@ -214,7 +214,8 @@ describe("runReconcile — candidato sin drift (OK)", () => {
 
     // haiku-4-5: (100 * 1 + 50 * 5) / 1_000_000 = 0.00035 USD
     const COST = 0.00035;
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation((url: string) => {
+    fetchSpy = spyOn(globalThis, "fetch");
+    fetchSpy.mockImplementation((url: string | URL | Request) => {
       const u = String(url);
       if (u.includes("/api/public/traces/")) {
         return Promise.resolve(
@@ -256,9 +257,8 @@ describe("runReconcile — excludeSession filtra el candidato", () => {
   beforeEach(() => {
     tmpRoot = mkdtempSync(join(tmpdir(), "reconcile-test-"));
     writeSessionJsonl(tmpRoot, SESSION_ID);
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
-      Promise.resolve(fetchNotFound()),
-    );
+    fetchSpy = spyOn(globalThis, "fetch");
+    fetchSpy.mockImplementation(() => Promise.resolve(fetchNotFound()));
   });
 
   afterEach(() => {
@@ -289,7 +289,8 @@ describe("runReconcile — error de fetch Langfuse (ECONNREFUSED)", () => {
     tmpRoot = mkdtempSync(join(tmpdir(), "reconcile-test-"));
     writeSessionJsonl(tmpRoot, SESSION_ID);
     // fetch rejects → getTrace returns null → classifyDrift → MISSING
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = spyOn(globalThis, "fetch");
+    fetchSpy.mockImplementation(() =>
       Promise.reject(new Error("ECONNREFUSED")),
     );
     process.env["LANGFUSE_PUBLIC_KEY"] = "pk-test";

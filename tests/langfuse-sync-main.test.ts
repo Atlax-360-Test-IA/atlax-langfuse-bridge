@@ -145,7 +145,8 @@ describe("processStopEvent — success path (JSONL válido → llama fetch)", ()
     exitSpy = spyOn(process, "exit").mockImplementation(() => {
       throw new Error("exit:0");
     });
-    fetchSpy = spyOn(globalThis, "fetch").mockImplementation(() =>
+    fetchSpy = spyOn(globalThis, "fetch");
+    fetchSpy.mockImplementation(() =>
       Promise.resolve(new Response("{}", { status: 207 })),
     );
     process.env["ATLAX_TRANSCRIPT_ROOT_OVERRIDE"] = FIXTURES_DIR;
