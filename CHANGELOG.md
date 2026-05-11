@@ -15,6 +15,14 @@ Semver retroactivo. Política:
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- Langfuse stack actualizado a `3.173.0` (web + worker pineados a versión exacta — bugfixes de seguridad SSRF + rate-limit, sin migraciones de schema). Aplicado en DEV + PRO.
+
+---
+
 ## [1.0.1] — 2026-05-11
 
 Pase de auditoría final exhaustiva pre-sellado v1.0.0 (4 agentes paralelos:

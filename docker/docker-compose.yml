@@ -1,6 +1,6 @@
 services:
   langfuse-web:
-    image: langfuse/langfuse:3.172.1
+    image: langfuse/langfuse:3.173.0
     restart: unless-stopped
     user: "1000:1000"
     deploy:
@@ -82,7 +82,7 @@ services:
       LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-Admin}
 
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.172.1
+    image: langfuse/langfuse-worker:3.173.0
     restart: unless-stopped
     user: "1000:1000"
     deploy:
