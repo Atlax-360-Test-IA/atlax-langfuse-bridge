@@ -8,6 +8,7 @@
 
 import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test";
 import { saveEnv, restoreEnv } from "./helpers/env";
+import type { DegradationEntry } from "../shared/degradation";
 
 const ENV_KEYS = [
   "LANGFUSE_PUBLIC_KEY",
@@ -33,7 +34,7 @@ function makeSummary(
     failed: number;
     windowHours: number;
     dryRun: boolean;
-    degradations: unknown[];
+    degradations: DegradationEntry[];
   }> = {},
 ) {
   return {

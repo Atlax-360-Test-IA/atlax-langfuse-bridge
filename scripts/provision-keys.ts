@@ -81,7 +81,7 @@ function log(msg: string): void {
 
 // ─── LiteLLM API calls ───────────────────────────────────────────────────────
 
-async function listExistingAliases(
+export async function listExistingAliases(
   host: string,
   masterKey: string,
 ): Promise<Set<string>> {
@@ -103,7 +103,7 @@ async function listExistingAliases(
   return aliases;
 }
 
-async function createKey(
+export async function createKey(
   host: string,
   masterKey: string,
   wl: WorkloadConfig,
@@ -128,7 +128,7 @@ async function createKey(
 
 // ─── Output file ─────────────────────────────────────────────────────────────
 
-interface KeyRecord {
+export interface KeyRecord {
   key_alias: string;
   key: string;
   soft_budget: number;
@@ -138,8 +138,27 @@ interface KeyRecord {
   skipped?: boolean;
 }
 
-function writeKeyFile(host: string, keys: KeyRecord[]): void {
-  const dir = join(homedir(), ".atlax-ai");
+export interface ProvisionOpts {
+  host: string;
+  masterKey: string;
+  dryRun: boolean;
+  /** Override output dir — defaults to ~/.atlax-ai. Used by tests. */
+  outputDir?: string;
+}
+
+export interface ProvisionSummary {
+  created: number;
+  skipped: number;
+  errors: number;
+  results: KeyRecord[];
+}
+
+export function writeKeyFile(
+  host: string,
+  keys: KeyRecord[],
+  outputDir?: string,
+): void {
+  const dir = outputDir ?? join(homedir(), ".atlax-ai");
   mkdirSync(dir, { recursive: true });
   const outPath = join(dir, "virtual-keys.json");
   const tmpPath = `${outPath}.tmp`;
@@ -157,22 +176,12 @@ function writeKeyFile(host: string, keys: KeyRecord[]): void {
   log(`Keys saved → ${outPath}`);
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
+// ─── runProvision / Main ──────────────────────────────────────────────────────
 
-async function main(): Promise<void> {
-  loadEnvFile();
-
-  const host = (process.env["LITELLM_HOST"] ?? "http://localhost:4001").replace(
-    /\/$/,
-    "",
-  );
-  const masterKey = process.env["LITELLM_MASTER_KEY"];
-  const dryRun = process.env["DRY_RUN"] === "1";
-
-  if (!masterKey) {
-    process.stderr.write("[provision-keys] LITELLM_MASTER_KEY not set\n");
-    process.exit(1);
-  }
+export async function runProvision(
+  opts: ProvisionOpts,
+): Promise<ProvisionSummary> {
+  const { host, masterKey, dryRun, outputDir } = opts;
 
   if (dryRun) log("DRY_RUN=1 — no keys will be created or saved");
 
@@ -231,14 +240,33 @@ async function main(): Promise<void> {
   }
 
   if (!dryRun && results.filter((r) => !r.skipped).length > 0) {
-    writeKeyFile(host, results);
+    writeKeyFile(host, results, outputDir);
   }
 
   const created = results.filter((r) => !r.skipped).length;
   const skipped = results.filter((r) => r.skipped).length;
   log(`Done — created: ${created}, skipped: ${skipped}, errors: ${errors}`);
 
-  if (errors > 0) process.exit(2);
+  return { created, skipped, errors, results };
+}
+
+async function main(): Promise<void> {
+  loadEnvFile();
+
+  const host = (process.env["LITELLM_HOST"] ?? "http://localhost:4001").replace(
+    /\/$/,
+    "",
+  );
+  const masterKey = process.env["LITELLM_MASTER_KEY"];
+  const dryRun = process.env["DRY_RUN"] === "1";
+
+  if (!masterKey) {
+    process.stderr.write("[provision-keys] LITELLM_MASTER_KEY not set\n");
+    process.exit(1);
+  }
+
+  const summary = await runProvision({ host, masterKey, dryRun });
+  if (summary.errors > 0) process.exit(2);
 }
 
 if (import.meta.main) {
