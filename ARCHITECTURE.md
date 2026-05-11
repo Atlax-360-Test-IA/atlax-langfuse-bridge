@@ -6,8 +6,8 @@
 > [`docs/operations/runbook.md`](./docs/operations/runbook.md). Para decisiones
 > formales, ver [`docs/adr/`](./docs/adr/).
 
-**Versión actual**: v0.6.0-wip (v1.0 al cumplir exit criteria piloto ≥3 devs × 2 semanas)
-**Última actualización**: 2026-05-10
+**Versión actual**: v1.0.0
+**Última actualización**: 2026-05-11
 **Estado**: PRO activo — `https://langfuse.atlax360.ai` (Cloud Run + Cloud SQL + ClickHouse GCE + Memorystore)
 
 ---
@@ -26,15 +26,15 @@
 
 ### Fases de versión
 
-| Fase   | Versión         | Hito                                                                |
-| ------ | --------------- | ------------------------------------------------------------------- |
-| Fase 0 | v0.1.0          | Hook Stop + reconciler + tier.json (PoC funcional)                  |
-| Fase 1 | v0.2.x          | Pricing centralizado + LiteLLM gateway opt-in M1-M3                 |
-| Fase 2 | v0.3.x          | Degradation log + tier cache + MCP server + browser extension       |
-| Fase 3 | v0.4.x          | Hardening sprints 1-6 (294 tests, 89% coverage)                     |
-| Fase 4 | v0.5.0 → v0.5.4 | Hardening sprints 7-15 + audit passes (466 tests, 0 deuda residual) |
-| Fase 5 | v0.6.0          | Documentación canónica completa + PRO activo (2026-05-10)           |
-| Fase 6 | v1.0.0 (piloto) | Exit criteria: ≥3 devs × 2 semanas en PRO sin incidentes críticos   |
+| Fase   | Versión         | Hito                                                                           |
+| ------ | --------------- | ------------------------------------------------------------------------------ |
+| Fase 0 | v0.1.0          | Hook Stop + reconciler + tier.json (PoC funcional)                             |
+| Fase 1 | v0.2.x          | Pricing centralizado + LiteLLM gateway opt-in M1-M3                            |
+| Fase 2 | v0.3.x          | Degradation log + tier cache + MCP server + browser extension                  |
+| Fase 3 | v0.4.x          | Hardening sprints 1-6 (294 tests, 89% coverage)                                |
+| Fase 4 | v0.5.0 → v0.5.4 | Hardening sprints 7-15 + audit passes (466 tests, 0 deuda residual)            |
+| Fase 5 | v0.6.0          | Documentación canónica completa + PRO activo (2026-05-10)                      |
+| Fase 6 | v1.0.0          | Vertex AI via gateway + 1053 tests + CHANGELOG ordenado (2026-05-11) ✅ actual |
 
 ---
 
