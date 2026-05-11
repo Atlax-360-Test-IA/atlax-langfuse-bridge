@@ -9,7 +9,7 @@
 #
 # Variables que envsubst reemplaza al render (ver provision-pro.sh):
 #   $GCP_PROJECT_ID         — id del proyecto GCP (ej. atlax360-ai-langfuse-pro)
-#   $LANGFUSE_VERSION       — versión de la imagen langfuse (ej. 3.172.1)
+#   $LANGFUSE_VERSION       — versión de la imagen langfuse (ej. 3.173.0)
 #
 # To deploy:
 #   envsubst < infra/cloud-run.yaml > /tmp/cloud-run.rendered.yaml
