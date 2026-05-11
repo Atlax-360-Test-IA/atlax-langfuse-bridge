@@ -509,18 +509,34 @@ export async function sendBridgeHealthTrace(
   }
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
+// ─── ReconcileOpts / ReconcileSummary ────────────────────────────────────────
 
-async function main() {
-  const PK = process.env["LANGFUSE_PUBLIC_KEY"];
-  const SK = process.env["LANGFUSE_SECRET_KEY"];
-  if (!PK || !SK) {
-    log("error", "LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY not set");
-    process.exit(1);
-  }
+export interface ReconcileOpts {
+  windowHours: number;
+  dryRun: boolean;
+  langfuseHost: string;
+  publicKey: string;
+  secretKey: string;
+  excludeSession?: string;
+  /** Override for tests — avoids scanning real ~/.claude/projects. */
+  jsonlRoot?: string;
+}
 
-  // S22-B: collector de degradaciones del scan — intercepta emitDegradation para
-  // acumular eventos y enviarlos luego como bridge-health trace.
+export interface ReconcileSummary {
+  candidates: number;
+  drift: number;
+  repaired: number;
+  failed: number;
+  windowHours: number;
+  dryRun: boolean;
+  degradations: DegradationEntry[];
+}
+
+// ─── runReconcile ─────────────────────────────────────────────────────────────
+
+export async function runReconcile(
+  opts: ReconcileOpts,
+): Promise<ReconcileSummary> {
   const collectedDegradations: DegradationEntry[] = [];
   function collectingEmitDegradation(source: string, err: unknown): void {
     const entry: DegradationEntry = {
@@ -530,51 +546,42 @@ async function main() {
       ts: new Date().toISOString(),
     };
     collectedDegradations.push(entry);
-    emitDegradation(source, err); // también escribe a stderr como siempre
+    emitDegradation(source, err);
   }
 
   const paths = await discoverRecentJsonls(
-    WINDOW_HOURS,
+    opts.windowHours,
     collectingEmitDegradation,
+    opts.jsonlRoot,
   );
   log("info", "scan-started", {
-    windowHours: WINDOW_HOURS,
+    windowHours: opts.windowHours,
     candidates: paths.length,
-    dryRun: DRY_RUN,
+    dryRun: opts.dryRun,
   });
 
   let drift = 0;
   let repaired = 0;
   let failed = 0;
 
-  // S18-B: acumular coste estimado por modelo + timestamps de inicio para
-  // comparar contra Anthropic cost_report al final del scan. Solo se usa si
-  // ANTHROPIC_ADMIN_API_KEY está configurada.
   const estimatedByModel = new Map<string, number>();
   const sessionStarts: string[] = [];
 
   for (const p of paths) {
     const sid = (p.split("/").pop() ?? "").replace(/\.jsonl$/, "");
 
-    // C4: reject filenames that don't match the expected UUID-like pattern.
-    // A malformed filename (e.g. "../secret") could propagate as a trace ID
-    // or path component in downstream calls.
     if (!SAFE_SID_RE.test(sid)) {
       log("warn", "skipping-invalid-sid", { path: p });
       continue;
     }
 
-    if (sid === EXCLUDE_SESSION) continue;
+    if (sid === (opts.excludeSession ?? "")) continue;
 
     const tid = `cc-${sid}`;
     const local = aggregate(p);
 
-    // Skip sessions with no assistant usage — they never generated a trace
-    // (the hook itself exits early on empty usage). Reporting them as drift
-    // is noise.
     if (local.turns === 0) continue;
 
-    // S18-B: acumular por familia de modelo y guardar timestamp de inicio.
     if (local.start) sessionStarts.push(local.start);
     for (const [model, agg] of local.models) {
       const fk = familyKey(model);
@@ -585,10 +592,6 @@ async function main() {
     const localForDrift = { ...local, end: local.end ?? null };
     let status = classifyDrift(localForDrift, remote);
 
-    // If metadata drift is absent but local cost is non-trivial, check whether
-    // Langfuse actually computed costs for the generations. A $0 generation sum
-    // while local cost > COST_EPSILON means the SDK did not calculate costs —
-    // re-uploading the trace forces recalculation.
     if (status === "OK" && local.totalCost > 0.01) {
       const genCost = await getGenerationCost(tid);
       status = classifyDrift(localForDrift, remote, genCost);
@@ -612,7 +615,7 @@ async function main() {
       path: p,
     });
 
-    if (DRY_RUN) continue;
+    if (opts.dryRun) continue;
 
     const cwd = local.cwd;
     if (!cwd) {
@@ -637,9 +640,6 @@ async function main() {
     failed,
   });
 
-  // S18-B/D: comparación post-scan con Anthropic cost_report.
-  // Opt-in: solo se ejecuta si ANTHROPIC_ADMIN_API_KEY está set.
-  // Errores son no-fatales — el reconciler termina con su exit code habitual.
   if (process.env["ANTHROPIC_ADMIN_API_KEY"] && estimatedByModel.size > 0) {
     const range = computeReportRange(sessionStarts);
     if (range) {
@@ -651,21 +651,43 @@ async function main() {
     }
   }
 
-  // S22-B: enviar bridge-health trace con el resumen del scan y degradaciones.
-  await sendBridgeHealthTrace(
-    {
-      candidates: paths.length,
-      drift,
-      repaired,
-      failed,
-      windowHours: WINDOW_HOURS,
-      dryRun: DRY_RUN,
-      degradations: collectedDegradations,
-    },
-    { host: HOST, publicKey: PK, secretKey: SK },
-  );
+  return {
+    candidates: paths.length,
+    drift,
+    repaired,
+    failed,
+    windowHours: opts.windowHours,
+    dryRun: opts.dryRun,
+    degradations: collectedDegradations,
+  };
+}
 
-  process.exit(failed > 0 ? 2 : 0);
+// ─── Main ────────────────────────────────────────────────────────────────────
+
+async function main() {
+  const PK = process.env["LANGFUSE_PUBLIC_KEY"];
+  const SK = process.env["LANGFUSE_SECRET_KEY"];
+  if (!PK || !SK) {
+    log("error", "LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY not set");
+    process.exit(1);
+  }
+
+  const summary = await runReconcile({
+    windowHours: WINDOW_HOURS,
+    dryRun: DRY_RUN,
+    langfuseHost: HOST,
+    publicKey: PK,
+    secretKey: SK,
+    excludeSession: EXCLUDE_SESSION,
+  });
+
+  await sendBridgeHealthTrace(summary, {
+    host: HOST,
+    publicKey: PK,
+    secretKey: SK,
+  });
+
+  process.exit(summary.failed > 0 ? 2 : 0);
 }
 
 if (import.meta.main) {

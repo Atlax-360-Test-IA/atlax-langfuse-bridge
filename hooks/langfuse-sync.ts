@@ -253,17 +253,9 @@ export async function sendToLangfuse(batch: unknown[]): Promise<void> {
   }
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── processStopEvent / Main ──────────────────────────────────────────────────
 
-async function main(): Promise<void> {
-  // Read stdin
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-  const raw = Buffer.concat(chunks).toString("utf-8").trim();
-  if (!raw) process.exit(0);
-
+export async function processStopEvent(raw: string): Promise<void> {
   let event: StopEvent;
   try {
     event = JSON.parse(raw) as StopEvent;
@@ -466,6 +458,16 @@ async function main(): Promise<void> {
   }
 
   await sendToLangfuse(batch);
+}
+
+async function main(): Promise<void> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk as Buffer);
+  }
+  const raw = Buffer.concat(chunks).toString("utf-8").trim();
+  if (!raw) process.exit(0);
+  await processStopEvent(raw);
 }
 
 if (import.meta.main) {
